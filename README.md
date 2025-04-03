@@ -1,3 +1,3 @@
 # Suboptimal-Optimization
 
-Extension repository for https://github.com/KevinBian107/S.O.O.
+Extension repository for [our old repository](https://github.com/KevinBian107/S.O.O.)
