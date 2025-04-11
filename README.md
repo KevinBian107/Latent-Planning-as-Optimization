@@ -41,4 +41,5 @@ python train.py
 ## Acknowledgements
 
 The decision transformer model implementation is based on the [official repository of DT](https://github.com/kzl/decision-transformer) .
+
 The latent plan transformer model implementation is based on the [official repository of LPT](https://github.com/mingluzhao/Latent-Plan-Transformer) .
