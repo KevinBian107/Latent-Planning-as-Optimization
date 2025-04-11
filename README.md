@@ -2,7 +2,19 @@
 
 ### Installation
 
-Follow the instructions in the [mujoco-py repo](https://github.com/openai/mujoco-py) to install MuJoCo.
+Follow the instructions in the [mujoco-py repo](https://github.com/openai/mujoco-py) to install MuJoCo. This need tobe manually putted into the system file by:
+
+```bash
+mkdir -p ~/.mujoco
+mv ~/Downloads/mujoco210 ~/.mujoco/
+```
+
+Use the following to ensure success installation:
+
+```bash
+ls ~/.mujoco/mujoco210
+```
+
 Then, dependencies can be installed with the following command:
 
 ```bash
@@ -16,7 +28,7 @@ cd data
 python process_data.py
 ```
 
-## Example usage
+## Example training
 
 Experiments can be reproduced with the following:
 
@@ -24,18 +36,6 @@ Experiments can be reproduced with the following:
 cd scripts
 python train.py
 ```
-
-To customize or experiment with different environments, the environment-specific configurations, such as the number of layers, context length, and learning rate, can be found in `scripts/config.py`. This file defines parameters for each supported environment and allows the script to adjust its training configuration dynamically based on the `--env_name` argument. 
-
-The `config.py` file includes various environments including Gym-Mujoco, Maze2D, and Franka Kitchen environments, with detailed specifications for parameters:
-- `n_layer`: Number of layers in the model.
-- `n_head`: Number of attention heads.
-- `hidden_size`: Dimensionality of the hidden layer.
-- `context_len`: Length of the context window for processing input sequences.
-- `learning_rate`: Learning rate used during training.
-- `langevin_step_size`: Step size for Langevin dynamics.
-- `env_targets`: Target return values for each environment.
-- `max_len`: Maximum episode length.
 
 
 ## Acknowledgements
