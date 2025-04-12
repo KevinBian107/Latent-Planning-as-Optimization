@@ -90,7 +90,7 @@ def extract_trajectories_from_minari(dataset):
         
         # Create trajectory data
         trajectory = {
-            'observations': episode.observations,
+            # 'observations': episode.observations,
             'actions': episode.actions,
             'rewards': episode.rewards,
             'terminals': np.zeros_like(episode.rewards)
@@ -99,15 +99,22 @@ def extract_trajectories_from_minari(dataset):
         # Set the last step as terminal
         if len(trajectory['terminals']) > 0:
             trajectory['terminals'][-1] = 1.0
-            
+        
+        
+        if isinstance(episode.observations, dict):
+            # d4rl
+            trajectory['observations'] = episode.observations['observation']
+        else: # mujoco 
+            trajectory['observations'] = episode.observations
+
         # Add next_observations field
         if hasattr(episode, 'next_observations'):
             trajectory['next_observations'] = episode.next_observations
         else:
             # If next_observations not available, create it from observations
             trajectory['next_observations'] = np.concatenate([
-                episode.observations[1:],
-                episode.observations[-1:] if len(episode.observations) > 0 else []
+                episode.observations['observation'][1:], 
+                episode.observations['observation'][-1:] if len(episode.observations['observation']) > 0 else []
             ], axis=0)
             
         trajectories.append(trajectory)
@@ -166,7 +173,7 @@ def process_mujoco_datasets():
                 print(dataset_hf)
 
                 # Save dataset to disk
-                directory_path = f'{name}'
+                directory_path = f'datasets/{name}'
                 os.makedirs(directory_path, exist_ok=True)
                 dataset_hf.save_to_disk(directory_path)
             except Exception as process_error:
@@ -230,7 +237,7 @@ def process_antmaze_datasets():
             print(dataset_hf)
 
             # Save dataset to disk
-            directory_path = f'dataset/{env_name}'
+            directory_path = f'datasets/{env_name}'
             os.makedirs(directory_path, exist_ok=True)
             dataset_hf.save_to_disk(directory_path)
         except Exception as process_error:
@@ -299,7 +306,7 @@ def process_maze2d_datasets():
             print(dataset_hf)
 
             # Save dataset to disk
-            directory_path = f'{env_name}'
+            directory_path = f'datasets/{env_name}'
             os.makedirs(directory_path, exist_ok=True)
             dataset_hf.save_to_disk(directory_path)
 
@@ -370,7 +377,7 @@ def process_kitchen_datasets():
             print(dataset_hf)
 
             # Save dataset to disk
-            directory_path = f'{env_name}'
+            directory_path = f'datasets/{env_name}'
             os.makedirs(directory_path, exist_ok=True)
             dataset_hf.save_to_disk(directory_path)
 
@@ -385,7 +392,14 @@ def process_kitchen_datasets():
 
 
 if __name__ == '__main__':
+    print('Processing MuJoCo datasets...')
     process_mujoco_datasets()
+    
+    print('Processing antmaze datasets...')
     process_antmaze_datasets()
+    
+    print('Processing maze2d datasets...')
     process_maze2d_datasets()
+    
+    print('Processing kitchen datasets...')
     process_kitchen_datasets()
