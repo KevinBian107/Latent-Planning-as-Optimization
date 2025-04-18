@@ -43,13 +43,13 @@ class DecisionTransformerConfig(PretrainedConfig):
         self,
         state_dim=17,
         act_dim=4,
-        n_traj=1000,
-        hidden_size=128,
-        max_ep_len=4096,
+        n_traj=100, # Wu's original: 1000
+        hidden_size=8, # WU's original: 128
+        max_ep_len=1024, # WU's original: 4096
         action_tanh=True,
         vocab_size=1,
         n_positions=2048, # original: 1024
-        n_layer=3,
+        n_layer=1, # WU's original: 3
         n_head=1,
         n_inner=None,
         activation_function="relu",
@@ -230,6 +230,13 @@ class DecisionTransformerGPT2Attention(nn.Module):
         if self.scale_attn_by_inverse_layer_idx:
             attn_weights = attn_weights / float(self.layer_idx + 1)
 
+        if attention_mask is not None:
+            # Adjust attention mask to match the attention weights shape
+            # attention_mask: [batch_size, seq_length] -> [batch_size, 1, 1, seq_length]
+            attention_mask = attention_mask[:, None, None, :]
+            attention_mask = attention_mask.expand(-1, self.num_heads, -1, -1)
+            attention_mask = attention_mask.reshape(attn_weights.shape[0], 1, attention_mask.shape[-1])
+        
         if not self.is_cross_attention:
             query_length, key_length = query.size(-2), key.size(-2)
             causal_mask = self.bias[:, :, key_length - query_length : key_length, :key_length]
@@ -309,8 +316,24 @@ class DecisionTransformerGPT2Attention(nn.Module):
         """
         Merges attn_head_size dim and num_attn_heads dim into hidden_size
         """
+        # tensor shape: 
+        # [50, 2000, 50, 128] ([B, H, L, D]) -> (50, 50, 2000 * 128)
+        # (batch_size B, num_heads H , seq_len L, attn_head_size D) -> (B, L, H * D)
+
+        # shape validation
+        assert tensor.size(-1) == attn_head_size, f"Expected last dimension to be {attn_head_size}, got {tensor.size(-1)}"
+
         tensor = tensor.permute(0, 2, 1, 3).contiguous()
-        new_shape = tensor.size()[:-2] + (num_heads * attn_head_size,)
+
+        # total_features = tensor.size(0) * tensor.size(2) * tensor.size(3)
+        # new_shape = (
+        #     tensor.size(0), 
+        #     tensor.size(2), 
+        #     total_features // (tensor.size(0) * tensor.size(2))
+        # )
+
+        new_shape = tensor.size()[:-2] + (num_heads * attn_head_size,) # (50, 2000, 128)
+
         return tensor.view(new_shape)
 
     def forward(
@@ -762,7 +785,7 @@ class DecisionTransformerGPT2Model(DecisionTransformerGPT2PreTrainedModel):
         # Model parallel
         self.model_parallel = False
         self.device_map = None
-        self.gradient_checkpointing = False
+        self.gradient_checkpointing = True # WU's original: False
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1133,6 +1156,11 @@ class DecisionTransformerModel(DecisionTransformerPreTrainedModel):
         z = z_0.view(-1, 1, self.hidden_size * self.n_latent)      # batch * n_latent, 1, latent_dim
         z = self.unet(z)
         z = z.view(-1, self.n_latent, self.hidden_size)
+
+        # batch_size = z_0.size(0)
+        # z = z_0.view(batch_size, 1, -1)  # Dynamic reshaping
+        # z = self.unet(z)
+        # z = z.view(batch_size, self.n_latent, self.hidden_size)        
         return z
 
     def infer_z_given_y(self, y, step_size=0.3, debug=False, omega_cg = 1):
@@ -1266,7 +1294,12 @@ class DecisionTransformerModel(DecisionTransformerPreTrainedModel):
         
         if attention_mask is None:
             attention_mask = torch.ones((batch_size, seq_length), dtype=torch.long)
-
+        
+        # # Convert attention mask to proper dtype and format
+        # attention_mask = attention_mask.to(dtype=states.dtype)
+        # # Convert mask of 1s and 0s to mask of -10000.0 and 0.0
+        # attention_mask = (1.0 - attention_mask) * -10000.0
+        
         state_embeddings = self.embed_state(states)
         action_embeddings = self.embed_action(actions)
 
