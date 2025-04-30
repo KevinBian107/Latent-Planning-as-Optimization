@@ -1,0 +1,48 @@
+path:
+  checkpoint_path: results/checkpoints
+  weights_path: results/weights
+  logs_path: results/logs
+  videos_path: results/videos
+
+
+BasicLPT:
+  hidden_size: 128
+  n_heads: 4
+  n_layers: 4
+  dropout: 0.1
+  max_position_embeddings: 1024
+
+
+BasicDT:
+  hidden_size: 16
+  n_heads: 4
+  n_layers: 4
+  dropout: 0.1
+  max_position_embeddings: 1024
+
+
+training:
+  batch_size: 64
+  learning_rate: 3e-4
+  weight_decay: 0.01
+  epochs: 100
+  grad_clip: 1.0
+  logger: ["file","wandb","tensorboard","console"]
+  debug: false
+  shuffle: true
+  num_workers: 1
+
+
+environment:
+  name: kitchen_mixed-v2 #the name would be used for import, youc ahnge change tt
+  env_type: minari #the env_type define the provider
+  max_episode_steps: 5000
+  seed: 42
+
+
+others:
+  tensorboard_port: 6006
+  logger_level: info
+
+
+

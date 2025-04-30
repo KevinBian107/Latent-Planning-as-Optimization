@@ -1,0 +1,8 @@
+# ignore notebook
+*.ipynb
+
+# ignore cache folder
+__pycache__/
+
+# ignore results folder
+/results/
