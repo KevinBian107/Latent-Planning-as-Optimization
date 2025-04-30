@@ -81,7 +81,7 @@ def print_side_by_side(folder_counts, type_counts, total_count):
 
 if __name__ == "__main__":
     root_dir = os.getcwd()  
-    include_exts = {".py", ".cpp", ".c", ".h", ".js", ".ts", ".html", ".css", ".java", ".rs"}  
+    include_exts = {".py", ".cpp", ".c", ".h", ".js", ".ts", ".html", ".css", ".java", ".rs", ".md", ".yaml"}  
     folder_counts, type_counts, total_count = count_code_lines(root_dir, include_exts)
     print_side_by_side(folder_counts, type_counts, total_count)
 

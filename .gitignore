@@ -4,5 +4,13 @@
 # ignore cache folder
 __pycache__/
 
-# ignore results folder
-/results/
+/results/**
+
+# 但保留四个子目录（结构）进入版本控制
+!results/
+!results/folder1/
+!results/folder2/
+!results/folder3/
+!results/folder4/
+
+.vscode/
