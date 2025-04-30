@@ -3,3 +3,4 @@ gym
 minari
 wandb
 tensorboard
+pytest

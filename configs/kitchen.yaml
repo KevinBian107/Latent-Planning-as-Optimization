@@ -38,6 +38,7 @@ environment:
   env_type: minari #the env_type define the provider
   max_episode_steps: 5000
   seed: 42
+  context_len: 16
 
 
 others:
