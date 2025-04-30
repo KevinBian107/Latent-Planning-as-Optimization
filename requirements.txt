@@ -2,4 +2,3 @@ pytorch
 gym
 minari
 wandb
-tensorboard

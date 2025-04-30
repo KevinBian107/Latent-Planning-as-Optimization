@@ -1,5 +1,5 @@
 """
-没别的用, 写着好玩
+没别的用, 写着好玩, 我们可以写个MPI的banner
 """
 def print_tensorboard_banner(port=6006, host="localhost"):
     url = f"http://{host}:{port}"
