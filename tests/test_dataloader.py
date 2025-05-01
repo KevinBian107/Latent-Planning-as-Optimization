@@ -35,7 +35,7 @@ def test_dataloader_creation(setup_path=None, config_args=None):
     from data import process_dataloader
     
     # Create the dataloader
-    dataloader = process_dataloader("kitchen_mixed-v2", args=config_args)
+    dataloader = process_dataloader("kitchen-mixed-v2", args=config_args)
     
     # Assertions to verify the dataloader
     assert dataloader is not None, "DataLoader should not be None"
@@ -55,7 +55,7 @@ def test_dataloader_iteration(setup_path=None, config_args=None):
     from data import process_dataloader
 
     # Get dataloader from previous test
-    dataloader = process_dataloader("kitchen_mixed-v2", args=config_args)
+    dataloader = process_dataloader("kitchen-mixed-v2", args=config_args)
     
     # Test iteration (just get first batch)
     batch_count = 0

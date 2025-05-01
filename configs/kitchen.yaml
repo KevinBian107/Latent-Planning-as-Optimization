@@ -34,8 +34,9 @@ training:
 
 
 environment:
-  name: kitchen_mixed-v2 #the name would be used for import, youc ahnge change tt
-  env_type: minari #the env_type define the provider
+  name: kitchen-mixed-v2 #the name would be used for import, youc ahnge change tt
+  env_type: D4RL
+  env_provider: minari #the env_type define the provider
   max_episode_steps: 5000
   seed: 42
   context_len: 16
