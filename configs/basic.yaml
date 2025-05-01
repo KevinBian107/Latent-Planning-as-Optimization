@@ -5,6 +5,7 @@ path:
   weights_path: results/weights
   logs_path: results/logs
   videos_path: results/videos
+  experiment_name: LPT on
 
 model:
   hidden_size: 0
@@ -24,4 +25,5 @@ training:
 environment:
   name: kitchen_mixed-v2
   max_episode_steps: 0
+
 

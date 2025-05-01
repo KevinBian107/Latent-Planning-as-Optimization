@@ -20,3 +20,6 @@ __pycache__/
 
 # ignore data folder
 /data
+
+#ignore wandb folder
+/wandb

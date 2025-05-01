@@ -36,9 +36,9 @@ class FileLogger(BaseLogger):
     def __init__(self, args):
         super().__init__(args)
 
-        log_dir = args.get("log_dir", "./logs")
+        log_dir = args.path.get("logs_path", "./results/logs")
         os.makedirs(log_dir, exist_ok=True)
-        log_file = os.path.join(log_dir, args.get("log_filename", "experiment.log"))
+        log_file = os.path.join(log_dir, args.path.get("experiment_name", "experiment.log"))
 
         self.logger = logging.getLogger("file_logger")
         self.logger.setLevel(logging.INFO)
@@ -60,7 +60,7 @@ class FileLogger(BaseLogger):
 class WandbLogger(BaseLogger):
     def __init__(self, args):
         super().__init__(args)
-        wandb.init(project=args.experiment_name, args=args)
+        wandb.init(project=args.path["experiment_name"], config = eval(f"args.{args.model_name}"))
 
     def log_info(self, info: dict):
         step = info.get("step", None)
@@ -93,7 +93,7 @@ class WandbLogger(BaseLogger):
 class TensorBoardLogger(BaseLogger):
     def __init__(self, args):
         super().__init__(args)
-        self.writer = SummaryWriter(log_dir=args.get("tb_log_dir", "./runs"))
+        self.writer = SummaryWriter(log_dir=args.path.get("tensorboard_path", "./runs"))
 
     def log_info(self, info: dict):
         step = info.get("step", 0)
