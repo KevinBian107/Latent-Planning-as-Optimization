@@ -18,5 +18,3 @@ __pycache__/
 # MacOS
 .DS_Store
 
-# ignore data folder
-/data

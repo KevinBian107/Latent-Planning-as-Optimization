@@ -1,19 +1,15 @@
 from data.dataset import MinariSequenceDataset
 from torch.utils.data import DataLoader
 
-def env_mapping(env_name, env_type):
-    '''
-    Map the environment name to a dataset download name.
-    '''
-    env_name_list = env_name.split('-')
-
-    return f"{env_type}/{env_name_list[0]}/{env_name_list[1]}-{env_name_list[2]}"
-
-
 def process_dataloader(env_name,args):
     try:
-        name = env_mapping(env_name, args.environment['env_type'])
-        dataset = MinariSequenceDataset(name = name, context_len=args.environment['context_len'])
+        # Map the environment name to a dataset download name.
+        env_name_list = env_name.split('-')
+        env_type = args.environment['env_type']
+
+        name = f"{env_type}/{env_name_list[0]}/{env_name_list[1]}-{env_name_list[2]}"
+
+        dataset = MinariSequenceDataset(name=name, context_len=args.environment['context_len'])
 
     except:
         raise Exception(f"Not Found environment_name {env_name}")
