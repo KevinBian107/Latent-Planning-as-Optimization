@@ -4,10 +4,10 @@ import torch
 import gym
 import minari
 def make_env(args):
-    if args.environments["name"] == "kicthen_mixed-v2":
+    if args.environment["name"] == "kitchen-mixed-v2":
         dataset = minari.load_dataset('D4RL/kitchen/mixed-v2')
         env = dataset.recover_environment()
-    elif args.environments["name"] == "kicthen_complete-v2":
+    elif args.environment["name"] == "kitchen-complete-v2":
         dataset = minari.load_dataset('D4RL/kitchen/complete-v2')
         env = dataset.recover_environment()
     else:
@@ -30,20 +30,24 @@ class BaseInferencer(ABC):
 
 
 class DTInferencer(BaseInferencer):
+    def __init__(self,args):
+        super().__init__(args)
+        self.args = args
+        self.model = self._load_model()
+
+
     def _load_model(self):
-        model = get_model("BasicLPT",**self.args["BasicLPT"])
+        model = get_model("BasicDT",**self.args.BasicDT)
         return model
 
     @torch.no_grad()
     def inference(self, steps=None):
-        #TODO
         obs = self.env.reset()
         done = False
         t = 0
-
         while not done and (steps is None or t < steps):
             #
-            action = ...
+            action = None
             obs, reward, done, info = self.env.step(action)
             self.env.render()
             t += 1
@@ -51,10 +55,6 @@ class DTInferencer(BaseInferencer):
 
 
 class LPTInferencer(BaseInferencer):
-    def _make_env(self):
-        dataset = ...
-        return dataset.recover_environment()
-
     def _load_model(self):
         model = get_model("BasicLPT",**self.args["BasicLPT"])
         return model

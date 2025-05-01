@@ -18,7 +18,7 @@ BasicLPT:
   device: cuda
   reward_weight: 1.0
   action_weight: 1.0
-  z_n_iters: 3
+  z_n_iters: 10
   langevin_step_size: 0.3
   noise_factor: 0.1
 

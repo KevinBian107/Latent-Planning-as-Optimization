@@ -129,10 +129,12 @@ class LptTrainer(BaseTrainer):
                 self._save_model(os.path.join(self.args.path["checkpoint_path"], f"dt_epoch{epoch + 1}"))
 
         if save_pt:
-            self._save_model(self.args.path["weights_path"])
+            self._save_model(self.args.path["weights_path"],weight_only=False)
 
-    def _save_model(self, save_dir):
+    def _save_model(self, save_dir, weight_only = True):
         os.makedirs(save_dir, exist_ok=True)
-        torch.save(self.model.state_dict(), os.path.join(save_dir, "lpt_model.pt"))
+        if weight_only:
+            torch.save(self.model.state_dict(), os.path.join(save_dir, "lpt_model.pt"))
+        else:
+            torch.save(self.model,os.path.join(save_dir, "lpt_model.pt"))
         print(f"[LPT] Model saved to {save_dir}")
-
