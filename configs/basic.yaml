@@ -19,11 +19,13 @@ training:
   shuffle: true
   num_workers: 0
   learning_rate: 0
-  num_epochs: 0
+  epochs: 0
   gradient_accumulation_steps: 0
 
 environment:
   name: kitchen_mixed-v2
+  env_type: D4RL
   max_episode_steps: 0
+  context_len: 0
 
 

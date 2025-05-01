@@ -18,8 +18,6 @@ __pycache__/
 # MacOS
 .DS_Store
 
-# ignore data folder
-/data
 
 #ignore wandb folder
 /wandb
