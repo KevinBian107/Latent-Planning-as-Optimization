@@ -39,7 +39,7 @@ def test_load_yaml_config(config_path):
     assert "training" in config, f"Config {config_path} should have a 'training' key"
     assert "environment" in config, f"Config {config_path} should have an 'environment' key"
 
-    # Verify nested keys (add more specific checks as needed)
+    # Verify nested keys
     assert "checkpoint_path" in config['path'], f"'path' in {config_path} missing 'checkpoint_path'"
     assert "weights_path" in config['path'], f"'path' in {config_path} missing 'weights_path'"
     assert "logs_path" in config['path'], f"'path' in {config_path} missing 'logs_path'"
@@ -56,9 +56,10 @@ def test_load_yaml_config(config_path):
     print(f"✅ Configuration loaded successfully from {config_path}")
 
 if __name__ == "__main__":
-    # This allows running the test directly with python
     setup_path_manually()
+
     print(f"Found {len(YAML_FILE_PATHS)} YAML files to test in {CONFIG_DIR}:")
+    
     all_passed = True
     for yaml_file in YAML_FILE_PATHS:
         try:
@@ -66,13 +67,10 @@ if __name__ == "__main__":
         except Exception as e:
             print(f"❌ Test failed for {yaml_file}: {e}")
             all_passed = False
-            # Optionally re-raise or break if you want to stop on first failure
-            # raise e
-            # break
 
     if all_passed:
         print("\n✅ All YAML configuration tests passed!")
     else:
         print("\n❌ Some YAML configuration tests failed.")
-        sys.exit(1) # Exit with a non-zero code to indicate failure
+        sys.exit(1)
 
