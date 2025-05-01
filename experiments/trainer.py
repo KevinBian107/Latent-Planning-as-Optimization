@@ -4,6 +4,8 @@ import torch
 from src.models import get_model
 from data import process_dataloader
 from logger import MultiLogger
+import wandb
+from tqdm import tqdm
 
 class BaseTrainer(ABC):
     def __init__(self, args):
@@ -27,7 +29,7 @@ class BaseTrainer(ABC):
         return process_dataloader(env_name=self.args.environment["name"], args = self.args)
     
     def _init_logger(self):
-        return MultiLogger(args = self.args, logger_list = self.args.environments["logger"])
+        return MultiLogger(args = self.args, logger_list = self.args.training["logger"])
     
 
     @abstractmethod
@@ -38,30 +40,43 @@ class BaseTrainer(ABC):
 class DtTrainer(BaseTrainer):
     def __init__(self, args):
         super().__init__(args)
+        self.args = args
         self.model = self._init_model()
-        self.dataloader = self._init_dataloder()
-        self.logger = self._init_logger()
+        self.device = torch.device(self.args.training["device"])
+        self.optimizer = torch.optim.AdamW(params=self.model.parameters(),
+                                           lr = float(self.args.training["learning_rate"]))
 
     def _init_model(self):
-        return get_model("BasicDT",**self.args["BasicDT"])
+        return get_model("BasicDT",**self.args.BasicDT)
         
 
     def train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
-        print("Training DT model...")
+        self.model.to(self.device)
+        total_step = 0
         for epoch in range(self.args.training["epochs"]):
-            for batch in self.dataloader:
-                #TODO
+            for i,batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
+                state_preds, action_preds, return_preds = self.model(
+                timesteps=batch["timesteps"].squeeze(-1).to(self.device),
+                states=batch["observations"].to(self.device),
+                actions=batch["prev_actions"].to(self.device),
+                returns_to_go=batch["return_to_go"].to(self.device)
+            )
+                self.optimizer.zero_grad()
+                loss = torch.nn.MSELoss()(action_preds, batch["actions"].to(self.device))
                 
-                self.logger.log_info({"text":
-                                            {
-                                                "info":f"[DT] Epoch {epoch + 1} done.",
-                                                "loss":loss.item()}
-                                            })
-                if save_checkpoints:
-                    self._save_model(os.path.join(save_dir, f"dt_epoch{epoch + 1}"))
+                loss.backward()
+                self.optimizer.step()
+                total_step += 1
+                if i%10 == 0:
+                    self.logger.log_info({"step":total_step,
+                                        "text":{"training_loss":loss.item()},
+                                        "scalars":{"training_loss":loss.cpu()},
+                                        })
+            if save_checkpoints:
+                self._save_model(os.path.join(self.args.path["checkpoint_path"], f"dt_epoch{epoch + 1}"))
 
         if save_pt:
-            self._save_model(save_dir)
+            self._save_model(self.args.path["weights_path"])
 
     def _save_model(self, save_dir):
         os.makedirs(save_dir, exist_ok=True)
@@ -74,6 +89,7 @@ class LptTrainer(BaseTrainer):
     def __init__(self, args):
         super().__init__(args)
         self.model = self._init_model()
+        self.device = torch.device(self.args.training["device"])
 
     def _init_model(self):
         return get_model("BasicLPT",**self.args["BasicLPT"])

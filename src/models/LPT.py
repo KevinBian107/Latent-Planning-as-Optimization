@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from src.models.conditional_decision_transformer import ConditionalDecisionTransformer
 from src.models.unet1d import Unet1D
 from typing import Optional, Tuple
-from src.models import register_model
+from src.util_function import register_model
 
 class Swish(nn.Module):
     def forward(self, x):

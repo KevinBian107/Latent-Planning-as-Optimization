@@ -1,9 +1,7 @@
 import torch.nn as nn
 import torch
 from src.layers.block import UnetAttentionBlock,BasicResBlock
-from src.models import register_model
 
-@register_model("unet1d")
 class Unet1D(nn.Module):
     def __init__(self, dim, channels=1, dim_mults=(1, 2, 4)):
         super().__init__()

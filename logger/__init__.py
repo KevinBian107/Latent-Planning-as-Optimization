@@ -4,6 +4,11 @@ import wandb
 import os
 import torch
 from torch.utils.tensorboard import SummaryWriter
+from utils.show_icon import launch_tensorboard
+import shutil
+from tqdm import tqdm
+
+
 
 
 #Abstract Base Logger
@@ -60,7 +65,8 @@ class FileLogger(BaseLogger):
 class WandbLogger(BaseLogger):
     def __init__(self, args):
         super().__init__(args)
-        wandb.init(project=args.path["experiment_name"], config = eval(f"args.{args.model_name}"))
+        wandb.init(project=args.path["experiment_name"], 
+                   config = eval(f"args.{args.model_name}"))
 
     def log_info(self, info: dict):
         step = info.get("step", None)
@@ -93,7 +99,11 @@ class WandbLogger(BaseLogger):
 class TensorBoardLogger(BaseLogger):
     def __init__(self, args):
         super().__init__(args)
-        self.writer = SummaryWriter(log_dir=args.path.get("tensorboard_path", "./runs"))
+        log_dir = args.path.get("tensorboard_path", "./runs")
+        if os.path.exists(log_dir):
+            shutil.rmtree(log_dir)
+        self.writer = SummaryWriter(log_dir=log_dir)
+        launch_tensorboard()
 
     def log_info(self, info: dict):
         step = info.get("step", 0)
@@ -122,7 +132,8 @@ class TensorBoardLogger(BaseLogger):
 class MultiLogger(BaseLogger):
     def __init__(self, args, logger_list):
         super().__init__(args)
-        self.loggers = logger_list
+        LOGGER_MAP = {"file":FileLogger,"wandb":WandbLogger,"tensorboard":TensorBoardLogger,"console":ConsoleLogger}
+        self.loggers = [LOGGER_MAP[logger_name](args) for logger_name in logger_list]
 
     def log_info(self, info: dict):
         for logger in self.loggers:
