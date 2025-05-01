@@ -1,22 +1,3 @@
-# import os
-# import sys
-# import torch
-
-# os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-# sys.path.append(os.getcwd())
-
-# from data import process_dataloader
-# from utils.args import parse_args
-# args = parse_args("configs/kitchen.yaml")
-# dataloader = process_dataloader("kitchen_mixed-v2",args = args)
-# args.training["num_workers"] = 0
-
-
-# # for batch in dataloader:
-# #     print("")
-
-
-
 import os
 import sys
 import pytest
@@ -62,7 +43,6 @@ def test_dataloader_creation(setup_path=None, config_args=None):
     assert dataloader.batch_size == config_args.training["batch_size"], "Batch size should match configuration"
     
     print(f"✅ DataLoader created successfully with {len(dataloader)} batches")
-    return dataloader
 
 def test_dataloader_iteration(setup_path=None, config_args=None):
     """Test that we can iterate through the dataloader and access batch data."""
@@ -71,9 +51,11 @@ def test_dataloader_iteration(setup_path=None, config_args=None):
         from utils.args import parse_args
         config_args = parse_args("configs/kitchen.yaml")
         config_args.training["num_workers"] = 0
-        
+    
+    from data import process_dataloader
+
     # Get dataloader from previous test
-    dataloader = test_dataloader_creation(config_args=config_args)
+    dataloader = process_dataloader("kitchen_mixed-v2", args=config_args)
     
     # Test iteration (just get first batch)
     batch_count = 0
@@ -82,19 +64,47 @@ def test_dataloader_iteration(setup_path=None, config_args=None):
     try:
         for i, batch in enumerate(dataloader):
             batch_count += 1
-            print(batch)
             
             # Check batch structure
             assert isinstance(batch, dict), "Batch should be a dictionary"
             assert len(batch) == 7, "Batch should contain 7 keys"
-            assert "observations" in batch, "Batch should contain 'observations'"
-            assert "actions" in batch, "Batch should contain 'actions'"
-            assert "reward" in batch, "Batch should contain 'reward'"
-            assert "done" in batch, "Batch should contain 'done'"
-            assert "return_to_go" in batch, "Batch should contain 'return_to_go'"
-            assert "prev_actions" in batch, "Batch should contain 'prev_actions'"
-            assert "timesteps" in batch, "Batch should contain 'timesteps'"
             
+            # check shape
+            assert "observations" in batch, "Batch should contain 'observations'"
+            assert batch['observations'].shape[:2] == (
+                config_args.training['batch_size'], config_args.environment['context_len']
+            ), "Observations shape mismatch"
+
+            assert "actions" in batch, "Batch should contain 'actions'"
+            assert batch['actions'].shape[:2] == (
+                config_args.training['batch_size'], config_args.environment['context_len']
+            ), "Actions shape mismatch"
+
+            assert "reward" in batch, "Batch should contain 'reward'"
+            assert batch['reward'].shape == (
+                config_args.training['batch_size'], config_args.environment['context_len'], 1
+            ), "Reward shape mismatch"
+
+            assert "done" in batch, "Batch should contain 'done'"
+            assert batch['done'].shape == (
+                config_args.training['batch_size'], config_args.environment['context_len'], 1
+            ), "Done shape mismatch"
+            
+            assert "return_to_go" in batch, "Batch should contain 'return_to_go'"
+            assert batch['return_to_go'].shape == (
+                config_args.training['batch_size'], config_args.environment['context_len'], 1
+            ), "Return to go shape mismatch"
+
+            assert "prev_actions" in batch, "Batch should contain 'prev_actions'"
+            assert batch['prev_actions'].shape[:2] == (
+                config_args.training['batch_size'], config_args.environment['context_len']
+            ), "Previous actions shape mismatch"
+
+            assert "timesteps" in batch, "Batch should contain 'timesteps'"
+            assert batch['timesteps'].shape == (
+                config_args.training['batch_size'], config_args.environment['context_len'], 1
+            ), "Timesteps shape mismatch"
+
             if i >= max_batches - 1:
                 break
                 
