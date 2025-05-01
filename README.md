@@ -1,5 +1,3 @@
-## LPT Training
-
 ### Installation
 
 Follow the instructions in the [mujoco-py repo](https://github.com/openai/mujoco-py) to install MuJoCo. This need tobe manually putted into the system file by:
@@ -18,25 +16,8 @@ ls ~/.mujoco/mujoco210
 Then, dependencies can be installed with the following command:
 
 ```bash
-conda env create -f env.yml
+conda env create env.yaml
 ```
-
-### Downloading datasets
-
-```bash
-cd data
-python process_data.py
-```
-
-## Example training
-
-Experiments can be reproduced with the following:
-
-```bash
-cd scripts
-python train.py
-```
-
 
 ## Acknowledgements
 

@@ -12,13 +12,18 @@ from src.models.MPILL import MPILearningLearner
 import torch.nn.functional as F
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-MAX_LEN, HIDDEN_SIZE, BATCH_SIZE, N_EPOCHS = 15, 32, 16, 5
-ema_momentum, alpha_bar = 0.99, None
+MAX_LEN = 15
+HIDDEN_SIZE = 32
+BATCH_SIZE = 16
+N_EPOCHS = 5
+ema_momentum = 0.99
+alpha_bar = None
 
 # Load Dataset
 dataset = minari.load_dataset("D4RL/kitchen/mixed-v2", download=True)
 env = dataset.recover_environment()
 sequence_data = []
+
 for episode in tqdm(dataset):
     obs = torch.tensor(episode.observations["observation"][:-1], dtype=torch.float32)
     acts = torch.tensor(episode.actions, dtype=torch.float32)
