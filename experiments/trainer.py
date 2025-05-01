@@ -90,26 +90,46 @@ class LptTrainer(BaseTrainer):
         super().__init__(args)
         self.model = self._init_model()
         self.device = torch.device(self.args.training["device"])
+        self.optimizer = torch.optim.AdamW(params=self.model.parameters(),
+                                           lr = float(self.args.training["learning_rate"]))
 
     def _init_model(self):
-        return get_model("BasicLPT",**self.args["BasicLPT"])
+        return get_model("BasicLPT",**self.args.BasicLPT)
 
 
     def train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
-        print("Training LPT model...")
-        #TODO
-        for epoch in range(self.args["training"]["epochs"]):
-            self.logger.log_info({"text":
-                                            {
-                                                "info":f"[DT] Epoch {epoch + 1} done.",
-                                                "loss":loss.item()}
-                                            })
+        self.model.to(self.device)
+        total_step = 0
+        for epoch in range(self.args.training["epochs"]):
+            for i,batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
+                batch_inds = torch.arange(batch["observations"].shape[0], device=self.device)
+                pred_action, pred_state, pred_reward = self.model(
+                    states=batch["observations"].to(self.device),
+                    actions=batch["prev_actions"].to(self.device),
+                    timesteps=batch["timesteps"].squeeze(-1),
+                    rewards=batch["reward"].to(self.device),
+                    batch_inds=batch_inds,
+                )
 
+                self.optimizer.zero_grad()
+                loss_r = torch.nn.MSELoss()(pred_reward, batch["reward"][:, -1, 0].to(self.device))
+                loss_a = torch.nn.MSELoss()(pred_action, batch["actions"][:, -1].to(self.device))
+                loss = loss_r + loss_a
+                loss.backward()
+                self.optimizer.step()
+                total_step += 1
+                if i%10 == 0:
+                    self.logger.log_info({"step":total_step,
+                                        "text":{"training_loss":loss.item()},
+                                        "scalars":{"MSE of Action":loss_a.cpu(),
+                                                   "MSE of Rewards":loss_r.cpu(),
+                                                   "MSE of Total":loss.cpu()},
+                                        })
             if save_checkpoints:
-                self._save_model(os.path.join(save_dir, f"lpt_epoch{epoch + 1}"))
+                self._save_model(os.path.join(self.args.path["checkpoint_path"], f"dt_epoch{epoch + 1}"))
 
         if save_pt:
-            self._save_model(save_dir)
+            self._save_model(self.args.path["weights_path"])
 
     def _save_model(self, save_dir):
         os.makedirs(save_dir, exist_ok=True)
