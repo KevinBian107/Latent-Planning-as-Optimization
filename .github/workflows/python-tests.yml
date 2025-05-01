@@ -1,0 +1,44 @@
+name: Python Tests
+
+# Controls when the workflow will run
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  test:
+    # Run on the latest version of Ubuntu
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.8', '3.9']
+
+    steps:
+    # Check out the repository code
+    - name: Check out repository code
+      uses: actions/checkout@v4
+
+    # Set up the specified Python version
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    # Install dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    # Step 4: Run pytest
+    # Pytest will automatically discover files starting with test_ or ending with _test.py
+    - name: Run pytest
+      run: |
+        pytest -v \
+        tests/test_load_yaml.py \
+        tests/test_dataloader.py \
