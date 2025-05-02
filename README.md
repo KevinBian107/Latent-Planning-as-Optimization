@@ -19,8 +19,14 @@ ls ~/.mujoco/mujoco210
 Then, dependencies can be installed with the following command using `conda` or `pip`:
 
 ```bash
-conda env create env.yaml
+conda env creates
 pip instal requirements.txt
+```
+
+To test if your installation is correct, run the following:
+
+```bash
+python tests/test_mpill_kitchen_seq.py
 ```
 
 ## Acknowledgements
