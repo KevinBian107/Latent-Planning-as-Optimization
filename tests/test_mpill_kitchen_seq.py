@@ -23,9 +23,9 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
 device = torch.device("cpu")
 
 MAX_LEN = 15
-HIDDEN_SIZE = 256
+HIDDEN_SIZE = 32
 BATCH_SIZE = 16
-N_EPOCHS = 30
+N_EPOCHS = 20
 ALPHA_P_MOMENTUM = 0.99  # Momentum for slow learning of alpha'
 KL_WEIGHT = 0.01  # Weight for KL divergence loss
 ALPHA_WEIGHT = 0.1  # Weight for alpha supervision loss
@@ -92,7 +92,11 @@ def detect_subtasks(episode):
 
 
 def determine_task_id(episode):
-    """Determine task ID based on completed subtasks"""
+    """
+    Determine task ID based on completed subtasks
+    
+    - There may be multiple subtask completed, depending on what the agent decides to do.
+    """
     try:
         # Get completed subtasks
         subtasks = detect_subtasks(episode)

@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import sys
 import minari
 from collections import defaultdict
-import torch.nn.functional as F
 
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
