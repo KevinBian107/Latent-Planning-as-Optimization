@@ -1,3 +1,6 @@
+# Meta Planning as Inference
+...
+
 ### Installation
 
 Follow the instructions in the [mujoco-py repo](https://github.com/openai/mujoco-py) to install MuJoCo. This need tobe manually putted into the system file by:
@@ -13,14 +16,15 @@ Use the following to ensure success installation:
 ls ~/.mujoco/mujoco210
 ```
 
-Then, dependencies can be installed with the following command:
+Then, dependencies can be installed with the following command using `conda` or `pip`:
 
 ```bash
 conda env create env.yaml
+pip instal requirements.txt
 ```
 
 ## Acknowledgements
 
-The decision transformer model implementation is based on the [official repository of DT](https://github.com/kzl/decision-transformer) .
+The decision transformer model implementation advices code from the [official repository of DT](https://github.com/kzl/decision-transformer) .
 
-The latent plan transformer model implementation is based on the [official repository of LPT](https://github.com/mingluzhao/Latent-Plan-Transformer) .
+The latent plan transformer model implementation advices code from the [official repository of LPT](https://github.com/mingluzhao/Latent-Plan-Transformer) .
