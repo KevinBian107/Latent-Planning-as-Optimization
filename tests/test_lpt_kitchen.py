@@ -5,6 +5,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import sys
 import minari
+
 all_losses = []
 r_losses = []
 a_losses = []
@@ -12,6 +13,8 @@ a_losses = []
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
+
+device = torch.device("cpu")
 
 # -------------------- 工作路径 --------------------
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -73,8 +76,6 @@ model = LatentPlannerModel(
 ).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-
-
 
 for epoch in range(NUM_EPOCHS):
     pbar = tqdm(range(len(sequence_data) // BATCH_SIZE))
