@@ -8,8 +8,8 @@ class MinariSequenceDataset(Dataset):
         self.context_len = context_len
         self.device = device
         self.sequence_data = []
-        self._load()
         self.name = name
+        self._load()
 
     def _load(self):
         dataset = minari.load_dataset(self.name, download=True)

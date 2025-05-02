@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from src.layers.block import Block
-from src.models import register_model
+from src.util_function import register_model
 @register_model("BasicDT")
 class DecisionTransformer(nn.Module):
     def __init__(self, state_dim, act_dim, n_blocks, h_dim, context_len,

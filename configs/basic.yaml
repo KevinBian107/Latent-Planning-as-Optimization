@@ -1,0 +1,31 @@
+# Example configuration file for testing
+
+path:
+  checkpoint_path: results/checkpoints
+  weights_path: results/weights
+  logs_path: results/logs
+  videos_path: results/videos
+  experiment_name: LPT on
+
+model:
+  hidden_size: 0
+  n_layer: 0
+  n_head: 0
+  context_len: 0
+  langevin_step_size: 0
+
+training:
+  batch_size: 0
+  shuffle: true
+  num_workers: 0
+  learning_rate: 0
+  epochs: 0
+  gradient_accumulation_steps: 0
+
+environment:
+  name: kitchen_mixed-v2
+  env_type: D4RL
+  max_episode_steps: 0
+  context_len: 0
+
+

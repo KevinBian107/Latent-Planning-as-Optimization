@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from src.models.conditional_decision_transformer import ConditionalDecisionTransformer
 from src.models.unet1d import Unet1D
 from typing import Optional, Tuple
-from src.models import register_model
+from src.util_function import register_model
 
 class Swish(nn.Module):
     def forward(self, x):
@@ -35,6 +35,8 @@ class LatentPlannerModel(nn.Module):
         self.context_len = context_len
         self.n_latent = n_latent
         self.z_dim = h_dim * n_latent
+        self.z_best_idx = 0
+        self.y_max = 0
 
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -75,6 +77,44 @@ class LatentPlannerModel(nn.Module):
     def action_forward(self, states, actions, timesteps, z_latent):
         pred_actions, _ = self.trajectory_generator(timesteps, states, actions, z_latent)
         return pred_actions
+    
+    def infer_z_given_y(self, y, step_size=0.3, debug=False, omega_cg=1.0):
+        self.eval()
+
+        batch_size = y.shape[0]
+        device = y.device
+        step_size = self.langevin_step_size
+
+        # Use best-known z as initialization (or random)
+        z = self.z_buffer[self.z_best_idx].unsqueeze(0).expand(batch_size, -1, -1).clone().to(device)
+
+        z_mse_grads_norm = []
+
+        for i in range(self.z_n_iters):
+            z = z.detach().clone()
+            z.requires_grad_(True)
+
+            z_unet = self.unet_forward(z)
+            y_hat = self.reward_forward(z_unet)
+
+            mse = F.mse_loss(y_hat, y.squeeze(), reduction='sum')
+            z_grad = torch.autograd.grad(mse, z)[0].detach()
+
+            # Langevin update
+            z = z - 0.5 * step_size**2 * (z + z_grad * omega_cg)
+
+            if self.z_with_noise:
+                z += self.noise_factor * step_size * torch.randn_like(z)
+
+            z_mse_grads_norm.append(torch.norm(z_grad, dim=1).mean().item())
+
+            if debug:
+                print(f"[{i}] MSE: {mse.item():.4f}, GradNorm: {z_mse_grads_norm[-1]:.4f}")
+
+        z = z.detach()
+        #FIXME if it should not change back to self.train
+        #self.train()
+        return z, z_mse_grads_norm
 
     def infer_z(self, states, actions, timesteps, rewards, batch_inds):
         self.eval()
@@ -124,7 +164,15 @@ class LatentPlannerModel(nn.Module):
         batch_inds = batch_inds.to(self.device)
 
         # 1. Infer z
-        z = self.infer_z(states, actions, timesteps, rewards, batch_inds)
+        if self.training:
+            z = self.infer_z(states, actions, timesteps, rewards, batch_inds)
+            max_y = torch.max(rewards)
+            max_idx = torch.argmax(rewards)
+            if max_y > self.y_max:
+                self.y_max = max_y
+                self.z_best_idx = max_idx 
+        else:
+            z,_ = self.infer_z_given_y(rewards,step_size=self.langevin_step_size)
 
         # 2. Refine z
         z_latent = self.unet_forward(z)

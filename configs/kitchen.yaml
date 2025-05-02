@@ -3,46 +3,62 @@ path:
   weights_path: results/weights
   logs_path: results/logs
   videos_path: results/videos
+  experiment_name: LPT_kitchen
 
 
 BasicLPT:
-  hidden_size: 128
-  n_heads: 4
-  n_layers: 4
-  dropout: 0.1
-  max_position_embeddings: 1024
+  state_dim: 59 
+  act_dim: 9 
+  context_len: 15 
+  h_dim: 16 
+  n_blocks: 3 
+  n_heads: 1 
+  drop_p: 0.1 
+  n_latent: 4
+  device: cuda
+  reward_weight: 1.0
+  action_weight: 1.0
+  z_n_iters: 10
+  langevin_step_size: 0.3
+  noise_factor: 0.1
 
 
 BasicDT:
-  hidden_size: 16
-  n_heads: 4
-  n_layers: 4
-  dropout: 0.1
-  max_position_embeddings: 1024
+  h_dim: 16
+  context_len: 15
+  state_dim: 59
+  act_dim: 9
+  n_heads: 1
+  n_blocks: 3
+  drop_p: 0.1
 
 
 training:
   batch_size: 64
-  learning_rate: 3e-4
+  learning_rate: 1e-4
   weight_decay: 0.01
-  epochs: 100
+  epochs: 2
   grad_clip: 1.0
-  logger: ["file","wandb","tensorboard","console"]
+  logger: ["tensorboard","file","wandb"]
   debug: false
+  device: cuda
   shuffle: true
   num_workers: 1
 
 
 environment:
-  name: kitchen_mixed-v2 #the name would be used for import, youc ahnge change tt
-  env_type: minari #the env_type define the provider
+  name: kitchen-mixed-v2 #the name would be used for import, youc ahnge change tt
+  env_type: D4RL
+  env_provider: minari #the env_type define the provider
   max_episode_steps: 5000
   seed: 42
+  context_len: 15
 
 
 others:
   tensorboard_port: 6006
   logger_level: info
+
 
 
 

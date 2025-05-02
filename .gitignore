@@ -14,3 +14,10 @@ __pycache__/
 !results/folder4/
 
 .vscode/
+
+# MacOS
+.DS_Store
+
+
+#ignore wandb folder
+/wandb
