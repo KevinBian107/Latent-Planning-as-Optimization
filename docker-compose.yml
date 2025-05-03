@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  mpi:
+    build:
+      context: .  # directory with Dockerfile
+      dockerfile: Dockerfile
+    image: wzhang3912/cpinference:latest
+    container_name: mpi
+    runtime: nvidia  # enable GPU (comment out this line if no nvidia gpu available)
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all # (comment out this line if no nvidia gpu available)
+      - MUJOCO_GL=osmesa
+    volumes:
+      - .:/Meta-Planning-as-Inference  # mount local code into container
+    working_dir: /Meta-Planning-as-Inference/tests
+    command: python test_mpill_kitchen_seq.py
+    
+
