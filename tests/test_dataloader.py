@@ -4,12 +4,11 @@ import pytest
 import torch
 from pathlib import Path
 
-# For direct execution (not via pytest)
+# For direct execution
 def setup_path_manually():
-    # Add the project root to sys.path
     project_root = Path(__file__).parent.parent
     sys.path.append(str(project_root))
-    os.chdir(project_root)  # Change to project root directory
+    os.chdir(project_root)
 
 # For pytest execution
 @pytest.fixture(scope="session")
@@ -57,9 +56,9 @@ def test_dataloader_iteration(setup_path=None, config_args=None):
     # Get dataloader from previous test
     dataloader = process_dataloader("kitchen-mixed-v2", args=config_args)
     
-    # Test iteration (just get first batch)
+    # Test iteration
     batch_count = 0
-    max_batches = 2  # Only test a few batches
+    max_batches = 2 
     
     try:
         for i, batch in enumerate(dataloader):
@@ -114,7 +113,6 @@ def test_dataloader_iteration(setup_path=None, config_args=None):
         raise e
 
 if __name__ == "__main__":
-    # This allows running the test directly with python
     setup_path_manually()
     test_dataloader_creation()
     test_dataloader_iteration()
