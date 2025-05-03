@@ -1,5 +1,5 @@
 """
-没别的用, 写着好玩
+没别的用, 写着好玩, 我们可以写个MPI的banner
 """
 import time
 import subprocess

@@ -13,7 +13,7 @@ torchvision==0.15.2
 
 # Gym and Mujoco
 gym==0.23.1
-mujoco==3.2.3
+mujoco==3.1.6
 mujoco-py==2.1.2.14
 minari==0.5.2
 
