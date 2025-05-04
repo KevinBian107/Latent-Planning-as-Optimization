@@ -16,3 +16,6 @@ transformers==4.46.3
 minari==0.5.2
 gymnasium-robotics>=1.2.4
 wandb
+
+# testing requirements
+pytest>=7.0.0
