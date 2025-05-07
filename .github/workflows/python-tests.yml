@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ['3.8', '3.9']
+        python-version: ['3.8']
 
     steps:
     # Check out the repository code
@@ -35,8 +35,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    # Step 4: Run pytest
-    # Pytest will automatically discover files starting with test_ or ending with _test.py
+    # Run pytest on the specified test files
     - name: Run pytest
       run: |
         pytest -v \

@@ -129,7 +129,7 @@ class LatentPlannerModel(nn.Module):
 
             # Predict reward
             pred_rewards = self.reward_forward(z_latent)
-            reward_loss = torch.nn.MSELoss()(pred_rewards, rewards[:, -1, 0])
+            reward_loss = torch.nn.MSELoss()(pred_rewards, rewards.squeeze(1))
 
             # Predict action
             pred_actions, _ = self.trajectory_generator(timesteps, states, actions, z_latent)
