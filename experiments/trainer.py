@@ -107,14 +107,14 @@ class LptTrainer(BaseTrainer):
                     states=batch["observations"].to(self.device),
                     actions=batch["prev_actions"].to(self.device),
                     timesteps=batch["timesteps"].squeeze(-1),
-                    rewards=batch["reward"].to(self.device),
+                    rewards=torch.sum(batch["reward"],dim = 1).to(self.device),
                     batch_inds=batch_inds,
                 )
 
                 self.optimizer.zero_grad()
-                loss_r = torch.nn.MSELoss()(pred_reward, batch["reward"][:, -1, 0].to(self.device))
+                loss_r = torch.nn.MSELoss()(pred_reward, torch.sum(batch["reward"], dim = 1).squeeze(1).to(self.device))
                 loss_a = torch.nn.MSELoss()(pred_action, batch["actions"][:, -1].to(self.device))
-                loss = loss_r + loss_a
+                loss = 0.25 * loss_r + loss_a
                 loss.backward()
                 self.optimizer.step()
                 total_step += 1
