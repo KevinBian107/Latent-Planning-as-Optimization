@@ -15,9 +15,12 @@ __pycache__/
 
 .vscode/
 
+
+
 # MacOS
 .DS_Store
 
 
 #ignore wandb folder
 /wandb
+/runs
