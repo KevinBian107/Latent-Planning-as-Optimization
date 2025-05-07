@@ -9,7 +9,7 @@ path:
 BasicLPT:
   state_dim: 59 
   act_dim: 9 
-  context_len: 15 
+  context_len: 32 
   h_dim: 16 
   n_blocks: 3 
   n_heads: 1 

@@ -14,7 +14,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
 
-device = torch.device("cpu")
+#device = torch.device("cpu")
 
 # -------------------- 工作路径 --------------------
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -89,15 +89,15 @@ for epoch in range(NUM_EPOCHS):
             states=batch["observations"],
             actions=batch["prev_actions"],
             timesteps=batch["timesteps"].squeeze(-1),
-            rewards=batch["reward"],
+            rewards=torch.sum(batch["reward"],dim=1),
             batch_inds=batch_inds,
         )
 
         optimizer.zero_grad()
         # 可以只用 reward loss，也可以 action + reward 一起用
-        loss_r = torch.nn.MSELoss()(pred_reward, batch["reward"][:, -1, 0])
+        loss_r = torch.nn.MSELoss()(pred_reward, torch.sum(batch["reward"],dim = 1).squeeze(1))
         loss_a = torch.nn.MSELoss()(pred_action, batch["actions"][:, -1])
-        loss = loss_r + loss_a
+        loss = 0.25 * loss_r + loss_a
         loss.backward()
         optimizer.step()
         all_losses.append(loss.item())
