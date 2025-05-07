@@ -22,20 +22,20 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
 
 device = torch.device("cpu")
 
-MAX_LEN = 15
-HIDDEN_SIZE = 32
+MAX_LEN = 50
+HIDDEN_SIZE = 128
 BATCH_SIZE = 16
-N_EPOCHS = 20
-ALPHA_P_MOMENTUM = 0.99  # Momentum for slow learning of alpha'
-KL_WEIGHT = 0.01  # Weight for KL divergence loss
-ALPHA_WEIGHT = 0.1  # Weight for alpha supervision loss
+N_EPOCHS = 50
+ALPHA_P_MOMENTUM = 0.99  # Slow learning
+KL_WEIGHT = 0.01  # Zeta VI
+ALPHA_WEIGHT = 0.3  # TD-BU
 LR = 1e-4
 LR_ENCODER = 1e-4  # η_φ
 LR_DECODER = 1e-4  # η_ψ
 LR_TRAJ_GEN = 1e-4  # η_β
 LR_REWARD = 1e-4   # η_γ
 
-WINDOW_SIZE = 20  # Window size for moving average
+WINDOW_SIZE = 10  # Window size for moving average
 SMOOTH_ALPHA = 0.05  # Exponential moving average smoothing factor
 
 MICROWAVE_IDX = 31    # Index for microwave door position
@@ -143,7 +143,11 @@ def process_episode(episode, max_len=MAX_LEN):
 
 
 def organize_data_by_task(dataset, max_len=MAX_LEN):
-    """Organize dataset by task ID"""
+    """
+    Organize dataset by task ID using functions 
+    to see what subtask is completed within each trajectory
+    """
+    
     print("Organizing data by task...")
     task_datasets = defaultdict(list)
     task_counts = defaultdict(int)
@@ -219,10 +223,10 @@ def exponential_moving_average(data, alpha=SMOOTH_ALPHA):
 
 def main():
     """Main training function implementing Meta-Planning as Inference"""
+   
     print("Loading dataset...")
     dataset = minari.load_dataset("D4RL/kitchen/mixed-v2", download=True)
     
-    # Organize data by task (creating D^tr_k for each task k)
     task_datasets = organize_data_by_task(dataset)
     
     print("Initializing model...")
@@ -318,9 +322,8 @@ def main():
                 ll_loss = KL_WEIGHT * kl + ALPHA_WEIGHT * alpha_loss
                 update_parameters(ll_optimizer, ll_loss, phi_params + psi_params)
                 
-                # mu_alpha for this task
-                # average across batch dimension first
-                batch_averaged_mu_alpha = mu_alpha.mean(dim=0)  # [B, alpha_dim] -> [alpha_dim]
+                # mu_alpha for this task, we do weak supervision on mu_alpha
+                batch_averaged_mu_alpha = mu_alpha.mean(dim=0) # [B, alpha_dim] -> [alpha_dim]
                 task_alphas.append(batch_averaged_mu_alpha.detach())
                 
                 loss_val = total_loss.item()
