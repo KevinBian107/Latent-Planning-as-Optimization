@@ -3,18 +3,14 @@ import numpy as np
 import os
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import sys
 import minari
 from collections import defaultdict
-from torch.optim.lr_scheduler import StepLR
-import torch.nn.functional as F
-
-import warnings
-warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.models.MPILL import MPILearningLearner
+from src.models.LPT import LatentPlannerModel
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
@@ -22,99 +18,21 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
 
 device = torch.device("cpu")
 
-MAX_LEN = 50 # Horizon length
-HIDDEN_SIZE = 128
-BATCH_SIZE = 16
-N_EPOCHS = 50
-ALPHA_P_MOMENTUM = 0.99  # Slow learning
-KL_WEIGHT = 0.01  # Zeta VI
-ALPHA_WEIGHT = 0.3  # TD-BU
-LR = 1e-4
-LR_ENCODER = 1e-4  # η_φ
-LR_DECODER = 1e-4  # η_ψ
-LR_TRAJ_GEN = 1e-4  # η_β
-LR_REWARD = 1e-4   # η_γ
+os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.getcwd())
 
-WINDOW_SIZE = 10  # Window size for moving average
+MAX_LEN = 15
+HIDDEN_SIZE = 16
+N_LAYER = 3
+N_HEAD = 1
+BATCH_SIZE = 16
+NUM_EPOCHS = 10
+LEARNING_RATE = 1e-4
+
+WINDOW_SIZE = 30  # Window size for running average
 SMOOTH_ALPHA = 0.05  # Exponential moving average smoothing factor
 
-# MICROWAVE_IDX = 31    # Index for microwave door position
-# KETTLE_IDX_X = 32     # Index for kettle x-coordinate
-# KETTLE_IDX_Y = 33     # Index for kettle y-coordinate
-# KETTLE_IDX_Z = 34     # Index for kettle z-coordinate
-# LIGHT_SWITCH_IDX = 26 # Index for light switch position
-# SLIDE_CABINET_IDX = 28 # Index for sliding cabinet door position
-
-# MICROWAVE_THRESHOLD = 0.2      # Threshold for considering microwave open
-# KETTLE_MOVE_THRESHOLD = 0.1    # Threshold for considering kettle moved
-# LIGHT_SWITCH_THRESHOLD = -0.6  # Threshold for considering light switch on
-# SLIDE_CABINET_THRESHOLD = 0.2  # Threshold for considering sliding cabinet open
-
-
-# def detect_subtasks(episode):
-#     """
-#     Detect which subtasks are completed in a trajectory
-    
-#     Args:
-#         episode: Minari episode object containing observations
-        
-#     Returns:
-#         list of str: Completed subtask IDs
-#     """
-#     # Get observation sequence
-#     observations = episode.observations["observation"]
-    
-#     initial_state = observations[0]
-#     final_state = observations[-1]
-    
-#     subtasks = []
-#     # Check if microwave is open
-#     if final_state[MICROWAVE_IDX] > MICROWAVE_THRESHOLD:
-#         subtasks.append("microwave")
-    
-#     # Check if kettle has moved
-#     kettle_moved = np.linalg.norm(
-#         final_state[KETTLE_IDX_X:KETTLE_IDX_Z+1] - 
-#         initial_state[KETTLE_IDX_X:KETTLE_IDX_Z+1]
-#     ) > KETTLE_MOVE_THRESHOLD
-#     if kettle_moved:
-#         subtasks.append("kettle")
-    
-#     # Check if light switch is on
-#     if final_state[LIGHT_SWITCH_IDX] < LIGHT_SWITCH_THRESHOLD:
-#         subtasks.append("light")
-    
-#     # Check if sliding cabinet is open
-#     if final_state[SLIDE_CABINET_IDX] > SLIDE_CABINET_THRESHOLD:
-#         subtasks.append("slidecabinet")
-    
-#     return subtasks
-
-
-# def determine_task_id(episode):
-#     """
-#     Determine task ID based on completed subtasks
-    
-#     - There may be multiple subtask completed, depending on what the agent decides to do.
-#     """
-#     try:
-#         # Get completed subtasks
-#         subtasks = detect_subtasks(episode)
-        
-#         # If no subtasks completed, return default task ID
-#         if not subtasks:
-#             return 0
-        
-#         # Determine task ID based on combination of completed subtasks
-#         subtask_str = "_".join(sorted(subtasks))
-        
-#         # Map to task ID using hash function (0-4)
-#         task_id = hash(subtask_str) % 5
-#         return task_id
-    
-#     except Exception as e:
-#         print(f"Error determining task ID: {e}")
-#         return 0  # Return default task ID
+context_len = MAX_LEN
 
 
 def segment_trajectory_by_subtasks(
@@ -385,34 +303,6 @@ def process_episode(episode, max_len=MAX_LEN):
     return sequences
 
 
-# def organize_data_by_task(dataset, max_len=MAX_LEN):
-#     """
-#     Organize dataset by task ID using functions 
-#     to see what subtask is completed within each trajectory
-#     """
-    
-#     print("Organizing data by task...")
-#     task_datasets = defaultdict(list)
-#     task_counts = defaultdict(int)
-    
-#     for episode in tqdm(dataset):
-#         try:
-#             task_id = determine_task_id(episode)
-#             task_counts[task_id] += 1
-            
-#             # Process episode and add sequences to task dataset
-#             sequences = process_episode(episode, max_len)
-#             task_datasets[task_id].extend(sequences)
-#         except Exception as e:
-#             print(f"Error processing episode: {e}")
-#             continue
-    
-#     for task_id, data in task_datasets.items():
-#         print(f"Task {task_id}: {len(data)} sequences, {task_counts[task_id]} episodes")
-    
-#     return task_datasets
-
-
 def get_batches(data, batch_size=BATCH_SIZE):
     """Generate batches from task data"""
     if len(data) < batch_size:
@@ -433,27 +323,15 @@ def get_batches(data, batch_size=BATCH_SIZE):
             )
             batch_indices = np.concatenate([batch_indices, extra])
             
-        # batch by stacking examples
+        # Create batch by stacking examples
         batch = [data[idx % len(data)] for idx in batch_indices]
         yield {k: torch.stack([d[k] for d in batch]).to(device) for k in batch[0]}
-
-
-def update_parameters(optimizer, loss, params):
-    """Update parameters with loss gradient"""
-    optimizer.zero_grad()
-    loss.backward(retain_graph=True)
-    
-    # clip gradients to prevent explosion
-    torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
-    optimizer.step()
-
 
 def moving_average(data, window_size=WINDOW_SIZE):
     """Calculate moving average over a window"""
     if len(data) < window_size:
         return data
     return np.convolve(data, np.ones(window_size)/window_size, mode='valid')
-
 
 def exponential_moving_average(data, alpha=SMOOTH_ALPHA):
     """Calculate exponential moving average with smoothing factor alpha"""
@@ -465,200 +343,231 @@ def exponential_moving_average(data, alpha=SMOOTH_ALPHA):
 
 
 def main():
-    """Main training function implementing Meta-Planning as Inference"""
-   
+    """Main training function implementing LPT with batch‐group outer loop"""
+    import torch
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from collections import defaultdict
+
     print("Loading dataset...")
-    # dataset = minari.load_dataset("D4RL/kitchen/mixed-v2", download=True)
     dataset = minari.load_dataset("D4RL/kitchen/complete-v2", download=True)
-    
-    # task_datasets = organize_data_by_task(dataset)
     task_datasets = split_task(dataset)
-    
-    print("Initializing model...")
+
     state_dim = dataset[0].observations["observation"].shape[1]
-    act_dim = dataset[0].actions.shape[1]
-    model = MPILearningLearner(
-        state_dim=state_dim, 
-        act_dim=act_dim, 
-        context_len=MAX_LEN, 
+    act_dim   = dataset[0].actions.shape[1]
+
+    model = LatentPlannerModel(
+        state_dim=state_dim,
+        act_dim=act_dim,
         h_dim=HIDDEN_SIZE,
-        device=device
+        context_len=context_len,
+        n_blocks=N_LAYER,
+        n_heads=N_HEAD,
+        device=device,
     ).to(device)
-    
-    beta_params = list(model.trajectory_generator.parameters())
-    gamma_params = list(model.reward_head.parameters())
-    alpha_params = list(model.generator.parameters())
-    phi_params = list(model.ll_encoder.parameters())
-    psi_params = list(model.ll_decoder.parameters())
-    
-    beta_optimizer = torch.optim.Adam(beta_params, lr=LR_TRAJ_GEN)
-    gamma_optimizer = torch.optim.Adam(gamma_params, lr=LR_REWARD)
-    alpha_optimizer = torch.optim.Adam(alpha_params, lr=LR)
-    ll_optimizer = torch.optim.Adam(phi_params + psi_params, lr=LR_ENCODER)
-    
-    beta_scheduler = StepLR(beta_optimizer, step_size=2, gamma=0.9)
-    gamma_scheduler = StepLR(gamma_optimizer, step_size=2, gamma=0.9)
-    alpha_scheduler = StepLR(alpha_optimizer, step_size=2, gamma=0.9)
-    ll_scheduler = StepLR(ll_optimizer, step_size=2, gamma=0.9)
-    
-    losses = []
-    action_losses = []
-    reward_losses = []
-    alpha_losses = []
-    kl_losses = []
-    task_alpha_values = {}
-    alpha_prime = None
-    
-    running_loss = None
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+    # Global logs
+    all_losses = []
+    r_losses   = []
+    a_losses   = []
+
+    running_loss   = None
     running_r_loss = None
     running_a_loss = None
-    running_alpha_loss = None
-    running_kl_loss = None
 
-    # tracking per-task performance
-    task_losses = {task_id: [] for task_id in task_datasets.keys()}
-    
+    # Per‐task histories
+    task_losses = {tid: [] for tid in task_datasets.keys()}
+
+    # Helper to limit the number of batches per task
+    def limited_batches(data, max_batches):
+        for idx, batch in enumerate(get_batches(data)):
+            if idx >= max_batches:
+                break
+            yield batch
+
+    # Precompute how many batches we'll take per task each epoch
+    n_batches_per_task = {
+        tid: min(5, len(data) // BATCH_SIZE + 1)
+        for tid, data in task_datasets.items()
+    }
+    task_ids = list(task_datasets.keys())
+
     print("Starting training...")
-    for epoch in range(N_EPOCHS):
-        print(f"\n===== Epoch {epoch+1}/{N_EPOCHS} =====")
-        epoch_losses = []
-        epoch_action_losses = []
-        epoch_reward_losses = []
-        epoch_alpha_losses = []
-        epoch_kl_losses = []
+    for epoch in range(NUM_EPOCHS):
+        print(f"\n===== Epoch {epoch+1}/{NUM_EPOCHS} =====")
+
+        # Per‐epoch buffers
+        epoch_losses   = []
+        epoch_r_losses = []
+        epoch_a_losses = []
         epoch_task_losses = defaultdict(list)
-        
-        for task_id, task_data in task_datasets.items():
-            print(f"Processing task {task_id}...")
-            task_alphas = []
-            task_epoch_losses = []
-            
-            n_batches = min(5, len(task_data) // BATCH_SIZE + 1)
-            
-            for batch_idx, batch in enumerate(get_batches(task_data)):
-                if batch_idx >= n_batches:
-                    break
-                    
-                pred_action, pred_reward, alpha_k, alpha_loss, kl, mu_alpha, _ = model(
-                    batch["observations"], 
-                    batch["prev_actions"], 
-                    batch["reward"], 
-                    batch["timesteps"].squeeze(-1), 
-                    alpha_bar=alpha_prime # give alpha prime from previous training for supervision
+
+        # Create one batch‐iterator per task
+        batch_iters = [
+            limited_batches(task_datasets[tid], n_batches_per_task[tid])
+            for tid in task_ids
+        ]
+
+        # Outer: one mini‐batch from each task at the same time
+        for batch_group in zip(*batch_iters):
+            # Process each task's batch
+            for tid, batch in zip(task_ids, batch_group):
+                batch_inds = torch.arange(BATCH_SIZE, device=device)
+                pred_action, pred_state, pred_reward = model(
+                    states=batch["observations"],
+                    actions=batch["prev_actions"],
+                    timesteps=batch["timesteps"].squeeze(-1),
+                    rewards=batch["reward"],
+                    batch_inds=batch_inds,
                 )
-                
-                loss_r = F.mse_loss(pred_reward, batch["reward"][:, -1, 0])
-                loss_a = F.mse_loss(pred_action, batch["actions"][:, -1])
-                total_loss = loss_a + loss_r + KL_WEIGHT * kl + ALPHA_WEIGHT * alpha_loss
-                
-                model.zero_grad()
-                
-                # trajectory generator parameters β
-                update_parameters(beta_optimizer, loss_a, beta_params)
-                
-                # reward model parameters γ
-                update_parameters(gamma_optimizer, loss_r, gamma_params)
-                
-                # fast learning parameters α
-                alpha_loss_term = KL_WEIGHT * kl + ALPHA_WEIGHT * alpha_loss
-                update_parameters(alpha_optimizer, alpha_loss_term, alpha_params)
-                
-                # LL parameters (φ and ψ)
-                ll_loss = KL_WEIGHT * kl + ALPHA_WEIGHT * alpha_loss
-                update_parameters(ll_optimizer, ll_loss, phi_params + psi_params)
-                
-                # mu_alpha for this task, we do weak supervision on mu_alpha
-                batch_averaged_mu_alpha = mu_alpha.mean(dim=0) # [B, alpha_dim] -> [alpha_dim]
-                task_alphas.append(batch_averaged_mu_alpha.detach())
-                
-                loss_val = total_loss.item()
-                r_loss_val = loss_r.item()
-                a_loss_val = loss_a.item()
-                alpha_loss_val = alpha_loss.item()
-                kl_loss_val = kl.item()
-            
+
+                loss_r = torch.nn.MSELoss()(pred_reward, batch["reward"][:, -1, 0])
+                loss_a = torch.nn.MSELoss()(pred_action, batch["actions"][:, -1])
+                total_loss = loss_r + loss_a
+
+                optimizer.zero_grad()
+                total_loss.backward()
+                optimizer.step()
+
+                # Metrics
+                lv = total_loss.item()
+                rv = loss_r.item()
+                av = loss_a.item()
+
+                # Running averages
                 if running_loss is None:
-                    running_loss = loss_val
-                    running_r_loss = r_loss_val
-                    running_a_loss = a_loss_val
-                    running_alpha_loss = alpha_loss_val
-                    running_kl_loss = kl_loss_val
+                    running_loss   = lv
+                    running_r_loss = rv
+                    running_a_loss = av
                 else:
-                    running_loss = 0.9 * running_loss + 0.1 * loss_val
-                    running_r_loss = 0.9 * running_r_loss + 0.1 * r_loss_val
-                    running_a_loss = 0.9 * running_a_loss + 0.1 * a_loss_val
-                    running_alpha_loss = 0.9 * running_alpha_loss + 0.1 * alpha_loss_val
-                    running_kl_loss = 0.9 * running_kl_loss + 0.1 * kl_loss_val
-                
-                epoch_losses.append(loss_val)
-                epoch_action_losses.append(a_loss_val)
-                epoch_reward_losses.append(r_loss_val)
-                epoch_alpha_losses.append(alpha_loss_val)
-                epoch_kl_losses.append(kl_loss_val)
-                task_epoch_losses.append(loss_val)
-                
-                print(f"  Batch {batch_idx+1}/{n_batches}, Loss: {loss_val:.4f}, Running Avg: {running_loss:.4f}, "
-                      f"Aaction-Loss: {a_loss_val:.4f}, Reward-Loss: {r_loss_val:.4f}, Alpha-Loss: {alpha_loss_val:.6f}")
-            
-            if task_alphas:
-                task_alpha_values[task_id] = torch.stack(task_alphas).mean(dim=0)  # [alpha_dim]
-                print(f"Task {task_id} alpha shape after averaging: {task_alpha_values[task_id].shape}")
-            
-            epoch_task_losses[task_id] = task_epoch_losses
-            task_losses[task_id].extend(task_epoch_losses)
-        
-        # Update α'
-        if task_alpha_values:
-            try:
-                # stack alpha values from all tasks
-                all_alphas = torch.stack(list(task_alpha_values.values()))  # [num_tasks, alpha_dim]
-                print(f"all_alphas shape: {all_alphas.shape}")
-                
-                # weighted average across tasks
-                weights = torch.ones(len(all_alphas), device=device) / len(all_alphas)
-                new_alpha_prime = torch.sum(all_alphas * weights.unsqueeze(-1), dim=0)  # [alpha_dim]
-                
-                # slow learning update of α'
-                if alpha_prime is None:
-                    alpha_prime = new_alpha_prime
-                else:
-                    alpha_prime = ALPHA_P_MOMENTUM * alpha_prime + (1 - ALPHA_P_MOMENTUM) * new_alpha_prime
-                
-                print(f"Updated alpha' norm: {alpha_prime.norm().item():.4f}, shape: {alpha_prime.shape}")
-            
-            except Exception as e:
-                print(f"Error calculating alpha': {e}")
-                if alpha_prime is None:
-                    alpha_prime = torch.zeros(HIDDEN_SIZE, device=device)
-        
-        beta_scheduler.step()
-        gamma_scheduler.step()
-        alpha_scheduler.step()
-        ll_scheduler.step()
-        
-        losses.extend(epoch_losses)
-        action_losses.extend(epoch_action_losses)
-        reward_losses.extend(epoch_reward_losses)
-        alpha_losses.extend(epoch_alpha_losses)
-        kl_losses.extend(epoch_kl_losses)
-        
-        avg_loss = np.mean(epoch_losses) if epoch_losses else 0
-        avg_action_loss = np.mean(epoch_action_losses) if epoch_action_losses else 0
-        avg_reward_loss = np.mean(epoch_reward_losses) if epoch_reward_losses else 0
-        avg_alpha_loss = np.mean(epoch_alpha_losses) if epoch_alpha_losses else 0
-        
-        print("\nTask-specific performance:")
-        for task_id, task_losses_epoch in epoch_task_losses.items():
-            if task_losses_epoch:
-                task_avg = np.mean(task_losses_epoch)
-                print(f"  Task {task_id}: Avg Loss = {task_avg:.4f}")
-        
+                    running_loss   = 0.9 * running_loss   + 0.1 * lv
+                    running_r_loss = 0.9 * running_r_loss + 0.1 * rv
+                    running_a_loss = 0.9 * running_a_loss + 0.1 * av
+
+                # Log
+                epoch_losses.append(lv)
+                epoch_r_losses.append(rv)
+                epoch_a_losses.append(av)
+                epoch_task_losses[tid].append(lv)
+                task_losses[tid].append(lv)
+
+                print(f"  Task {tid}, Batch Loss={lv:.4f}, "
+                      f"RunAvg={running_loss:.4f}, A-Loss={av:.4f}, R-Loss={rv:.4f}")
+
+        # After all batch‐groups in this epoch, extend global logs
+        all_losses.extend(epoch_losses)
+        r_losses.extend(epoch_r_losses)
+        a_losses.extend(epoch_a_losses)
+
+        # Epoch summary
+        print("\nTask‐specific performance this epoch:")
+        for tid, vals in epoch_task_losses.items():
+            print(f"  Task {tid}: Avg Loss = {np.mean(vals):.4f}")
         print(f"\nEpoch {epoch+1} summary:")
-        print(f"  Average loss: {avg_loss:.4f}")
-        print(f"  Action loss: {avg_action_loss:.4f}")
-        print(f"  Reward loss: {avg_reward_loss:.4f}")
-        print(f"  Alpha loss: {avg_alpha_loss:.6f}")
-        print(f"  Running average loss: {running_loss:.4f}")
+        print(f"  Avg Total Loss:  {np.mean(epoch_losses):.4f}")
+        print(f"  Avg Action Loss: {np.mean(epoch_a_losses):.4f}")
+        print(f"  Avg Reward Loss: {np.mean(epoch_r_losses):.4f}")
+        print(f"  Running Avg Loss:{running_loss:.4f}")
+
+    # —————————————————————————————————————————————————————————————
+    # Visualization
+    print("\nLPT training complete. Generating visualizations...")
+
+    # 1) Six‐panel overview
+    plt.figure(figsize=(18, 12))
+
+    # a) Raw losses
+    plt.subplot(2, 3, 1)
+    plt.plot(all_losses, alpha=0.3, label="Total (raw)")
+    plt.plot(a_losses,    alpha=0.3, label="Action (raw)")
+    plt.plot(r_losses,    alpha=0.3, label="Reward (raw)")
+    plt.title("Raw Training Losses"); plt.xlabel("Step"); plt.ylabel("Loss")
+    plt.legend(); plt.grid(True)
+
+    # b) Moving average
+    plt.subplot(2, 3, 2)
+    w = min(WINDOW_SIZE, len(all_losses))
+    if w > 0:
+        plt.plot(moving_average(all_losses, w), label="Total (MA)")
+        plt.plot(moving_average(a_losses,    w), label="Action (MA)")
+        plt.plot(moving_average(r_losses,    w), label="Reward (MA)")
+    plt.title(f"Moving Average (w={w})"); plt.xlabel("Step"); plt.ylabel("Loss")
+    plt.legend(); plt.grid(True)
+
+    # c) Exponential MA
+    plt.subplot(2, 3, 3)
+    if all_losses:
+        plt.plot(exponential_moving_average(all_losses, SMOOTH_ALPHA), label="Total (EMA)")
+    if a_losses:
+        plt.plot(exponential_moving_average(a_losses,    SMOOTH_ALPHA), label="Action (EMA)")
+    if r_losses:
+        plt.plot(exponential_moving_average(r_losses,    SMOOTH_ALPHA), label="Reward (EMA)")
+    plt.title(f"Exponential MA (α={SMOOTH_ALPHA})"); plt.xlabel("Step"); plt.ylabel("Loss")
+    plt.legend(); plt.grid(True)
+
+    # d) Per‐task EMA
+    plt.subplot(2, 3, 4)
+    for tid, vals in task_losses.items():
+        if vals:
+            plt.plot(exponential_moving_average(vals, SMOOTH_ALPHA), label=f"Task {tid}")
+    plt.title("Per‐Task Loss (EMA)"); plt.xlabel("Step"); plt.ylabel("Loss")
+    plt.legend(); plt.grid(True)
+
+    # e) Loss distribution
+    plt.subplot(2, 3, 5)
+    plt.hist(all_losses, bins=30, alpha=0.7, label="Total")
+    plt.hist(a_losses,    bins=30, alpha=0.5, label="Action")
+    plt.hist(r_losses,    bins=30, alpha=0.5, label="Reward")
+    plt.title("Loss Distribution"); plt.xlabel("Loss Value"); plt.ylabel("Frequency")
+    plt.legend(); plt.grid(True)
+
+    # f) Action/Total ratio
+    plt.subplot(2, 3, 6)
+    if all_losses:
+        ratio = np.array(a_losses) / (np.array(all_losses) + 1e-8)
+        plt.plot(exponential_moving_average(ratio.tolist(), SMOOTH_ALPHA), label="Action/Total")
+        plt.axhline(0.5, color='r', linestyle='--', label="50% line")
+    plt.title("Action vs Total Loss Ratio"); plt.xlabel("Step"); plt.ylabel("Ratio")
+    plt.legend(); plt.ylim(0,1); plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+    # 2) Task performance comparison
+    if any(task_losses.values()):
+        plt.figure(figsize=(12, 6))
+        task_avg = {}
+        for tid, vals in task_losses.items():
+            if not vals:
+                continue
+            h = len(vals)//2
+            task_avg[tid] = {
+                'first':   np.mean(vals[:h]) if h>0 else 0,
+                'second':  np.mean(vals[h:]) if h<len(vals) else 0,
+                'overall': np.mean(vals),
+            }
+
+        ids      = list(task_avg.keys())
+        firsts   = [task_avg[i]['first']   for i in ids]
+        seconds  = [task_avg[i]['second']  for i in ids]
+        overalls = [task_avg[i]['overall'] for i in ids]
+
+        x = np.arange(len(ids)); w = 0.25
+        plt.bar(x-w, firsts,   w, label="First half")
+        plt.bar(x,   overalls, w, label="Overall")
+        plt.bar(x+w, seconds,  w, label="Second half")
+
+        plt.xticks(x, ids)
+        plt.title("Task Performance Comparison")
+        plt.xlabel("Task ID"); plt.ylabel("Avg Loss")
+        plt.legend(); plt.grid(axis='y')
+        plt.tight_layout()
+        plt.show()
+    else:
+        print("No per-task data to plot.")
+
 
 if __name__ == "__main__":
     main()
