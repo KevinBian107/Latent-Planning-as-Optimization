@@ -327,11 +327,13 @@ def get_batches(data, batch_size=BATCH_SIZE):
         batch = [data[idx % len(data)] for idx in batch_indices]
         yield {k: torch.stack([d[k] for d in batch]).to(device) for k in batch[0]}
 
+
 def moving_average(data, window_size=WINDOW_SIZE):
     """Calculate moving average over a window"""
     if len(data) < window_size:
         return data
     return np.convolve(data, np.ones(window_size)/window_size, mode='valid')
+
 
 def exponential_moving_average(data, alpha=SMOOTH_ALPHA):
     """Calculate exponential moving average with smoothing factor alpha"""

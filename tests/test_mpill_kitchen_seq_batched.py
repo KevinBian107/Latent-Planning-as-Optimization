@@ -7,6 +7,7 @@ import minari
 from collections import defaultdict
 from torch.optim.lr_scheduler import StepLR
 import torch.nn.functional as F
+import pdb
 
 import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -433,30 +434,36 @@ def main():
         epoch_task_losses   = defaultdict(list)
 
         # Re-create batch iterators for each task
+        # task_datasets[tid] is a list with 962 items (batch) for microwave, each item is a dict, each with length of something (i.e. 20 time steps)
+        # In total 962 个batch x 20 个time steps每个batch
+        # during learning, we are doing multi-step leraning in one pass, just like LPT
+        
         batch_iters = [
             limited_batches(task_datasets[tid], n_batches_per_task[tid])
             for tid in task_ids
         ]
 
         # Outer: one batch from each task to constitute one batch_group
+        # batch_iters is generating 4 tasks, batch_group is a tupleof length 4
         for batch_group in zip(*batch_iters):
             task_alpha_vals = {}
 
             # Inner: process each task in this batch_group
-            for tid, batch in zip(task_ids, batch_group):
+            for tid, task_batch in zip(task_ids, batch_group):
+                # batch is a dict with ['observations', 'actions', 'reward', 'return_to_go', 'prev_actions', 'timesteps']
                 
                 # print('TEST', alpha_prime) should be same for each task in one batch_group
                 
                 pred_action, pred_reward, alpha_k, alpha_loss, kl, mu_alpha, _ = model(
-                    batch["observations"],
-                    batch["prev_actions"],
-                    batch["reward"],
-                    batch["timesteps"].squeeze(-1),
+                    task_batch["observations"],
+                    task_batch["prev_actions"],
+                    task_batch["reward"],
+                    task_batch["timesteps"].squeeze(-1),
                     alpha_bar=alpha_prime
                 )
 
-                loss_r    = F.mse_loss(pred_reward, batch["reward"][:, -1, 0])
-                loss_a    = F.mse_loss(pred_action,  batch["actions"][:, -1])
+                loss_r    = F.mse_loss(pred_reward, task_batch["reward"][:, -1, 0])
+                loss_a    = F.mse_loss(pred_action,  task_batch["actions"][:, -1])
                 fast_loss = KL_WEIGHT * kl + ALPHA_WEIGHT * alpha_loss
                 total_loss = loss_a + loss_r + fast_loss
 
@@ -464,7 +471,7 @@ def main():
                 update_parameters(beta_optimizer,  loss_a,    beta_params)
                 update_parameters(gamma_optimizer, loss_r,    gamma_params)
                 update_parameters(alpha_optimizer, fast_loss, alpha_params)
-                update_parameters(ll_optimizer,    fast_loss, phi_params + psi_params)
+                update_parameters(ll_optimizer,    fast_loss, phi_params + psi_params) # appending
 
                 # Metrics
                 lv     = total_loss.item()
@@ -496,8 +503,10 @@ def main():
                 task_losses[tid].append(lv)
                 epoch_task_losses[tid].append(lv)
 
-                # Collect for α′ update
+                # Collect for α′ update, average acros timesteps
+                # 
                 task_alpha_vals[tid] = mu_alpha.mean(dim=0).detach()
+                pdb.set_trace()
 
                 print(f"  Task {tid}: Loss={lv:.4f}, RunAvg={running_loss:.4f}, "
                       f"A-Loss={av:.4f}, R-Loss={rv:.4f}, α-Loss={avloss:.6f}")
