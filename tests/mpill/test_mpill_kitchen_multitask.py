@@ -22,7 +22,7 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
 
 device = torch.device("cpu")
 
-MAX_LEN = 50
+MAX_LEN = 50 # Horizon length
 HIDDEN_SIZE = 128
 BATCH_SIZE = 16
 N_EPOCHS = 50
@@ -38,96 +38,260 @@ LR_REWARD = 1e-4   # η_γ
 WINDOW_SIZE = 10  # Window size for moving average
 SMOOTH_ALPHA = 0.05  # Exponential moving average smoothing factor
 
-MICROWAVE_IDX = 31    # Index for microwave door position
-KETTLE_IDX_X = 32     # Index for kettle x-coordinate
-KETTLE_IDX_Y = 33     # Index for kettle y-coordinate
-KETTLE_IDX_Z = 34     # Index for kettle z-coordinate
-LIGHT_SWITCH_IDX = 26 # Index for light switch position
-SLIDE_CABINET_IDX = 28 # Index for sliding cabinet door position
-
-MICROWAVE_THRESHOLD = 0.2      # Threshold for considering microwave open
-KETTLE_MOVE_THRESHOLD = 0.1    # Threshold for considering kettle moved
-LIGHT_SWITCH_THRESHOLD = -0.6  # Threshold for considering light switch on
-SLIDE_CABINET_THRESHOLD = 0.2  # Threshold for considering sliding cabinet open
-
-
-def detect_subtasks(episode):
+def segment_trajectory_by_subtasks(
+    full_episode, 
+    task_goal_keys, 
+    proximity_thresholds,
+    stability_duration
+):
     """
-    Detect which subtasks are completed in a trajectory
+    Segments a single long trajectory into multiple sub-trajectories based on
+    stable completion of sub-tasks. A sub-task is complete when its achieved_goal 
+    stays close to its desired_goal for a specified stability_duration.
+
+    Args:
+        full_episode: A dictionary-like object representing one full episode.
+                      - full_episode.observations['achieved_goal'][task_key] is a sequence (step, D_task_goal_dim)
+                      - full_episode.observations['desired_goal'][task_key] is a static target (step, D_task_goal_dim)
+        task_goal_keys: List of strings for sub-task keys.
+        proximity_thresholds: Dict mapping task_key to a proximity threshold.
+        stability_duration: Integer, number of timesteps for stability.
+
+    Returns:
+        A list of dictionaries, where each dictionary is a segmented sub-trajectory.
+        Each sub-trajectory will have an 'task_id' field.
+    """
+    segmented_trajectories = []
+
+    all_obs_data = full_episode.observations
+    all_actions = full_episode.actions
+    all_rewards = full_episode.rewards
+    all_terminations = full_episode.terminations
+    all_truncations = full_episode.truncations
+
+    num_total_steps = len(all_actions)
+    if num_total_steps == 0 or stability_duration <= 0:
+        return []
+
+    current_segment_start_idx = 0
+    
+    # Tracks consecutive timesteps each task has been "close"
+    task_close_streaks = {key: 0 for key in task_goal_keys}
+    
+    # Tracks which of the main tasks have been segmented
+    tasks_segmented_this_episode = set()
+
+    for t in range(num_total_steps):
+        task_to_segment = None
+
+        for task_key in task_goal_keys:
+            if task_key in tasks_segmented_this_episode:
+                continue # This task has already been segmented in this episode
+
+            if task_key not in all_obs_data.get('achieved_goal', {}) or \
+                task_key not in all_obs_data.get('desired_goal', {}):
+                raise ValueError(f"Task key '{task_key}' not found in observations.")
+                # if task_key in task_close_streaks: del task_close_streaks[task_key] # Stop tracking
+                # continue
+
+            current_achieved_state_for_task = all_obs_data['achieved_goal'][task_key][t]
+            desired_state_for_task = all_obs_data['desired_goal'][task_key][0]
+
+            # Calculate difference
+            # Vector goals
+            if isinstance(current_achieved_state_for_task, np.ndarray) and current_achieved_state_for_task.ndim > 0:
+                diff = np.linalg.norm(current_achieved_state_for_task - desired_state_for_task)
+            else: # Scalar goals
+                diff = np.abs(current_achieved_state_for_task - desired_state_for_task)
+
+            prox_threshold = proximity_thresholds.get(task_key)
+            if prox_threshold is None:
+                raise ValueError(f"Proximity threshold for task '{task_key}' not provided.")
+                # if task_key in task_close_streaks: del task_close_streaks[task_key]
+                # continue
+
+            if diff < prox_threshold:
+                task_close_streaks[task_key] += 1
+            else:
+                task_close_streaks[task_key] = 0
+
+            # Check if this task met the stability duration
+            if task_close_streaks[task_key] >= stability_duration:
+                task_to_segment = task_key
+                break # Prioritize this task for segmentation at this timestep
+        
+        # ---starts segmenting when a task is stable--- #
+        if task_to_segment:
+            segment_end_idx = t 
+            # print(f"Task '{task_to_segment}' detected as stable and completed at timestep {segment_end_idx}.")
+
+            segment = {}
+            segment_observations = {}
+
+            # Copy the segment of the trajectory
+            achieved_goal = all_obs_data['achieved_goal'][task_to_segment][current_segment_start_idx : segment_end_idx + 1]
+            desired_goal = all_obs_data['desired_goal'][task_to_segment][current_segment_start_idx : segment_end_idx + 1]
+            observation = all_obs_data['observation'][current_segment_start_idx : segment_end_idx + 1]
+
+            segment_observations['achieved_goal'] = {}
+            segment_observations['achieved_goal'][task_to_segment] = achieved_goal
+            segment_observations['desired_goal'] = {}
+            segment_observations['desired_goal'][task_to_segment] = desired_goal
+
+            segment_observations['observation'] = observation
+
+            segment['observations'] = segment_observations
+            segment['actions'] = all_actions[current_segment_start_idx : segment_end_idx + 1]
+            segment['rewards'] = all_rewards[current_segment_start_idx : segment_end_idx + 1]
+
+            segment_terminations = np.zeros_like(segment['rewards'], dtype=bool)
+            if len(segment_terminations) > 0:
+                segment_terminations[-1] = True
+            segment['terminations'] = segment_terminations
+            segment['truncations'] = np.zeros_like(segment['rewards'], dtype=bool)
+
+            segment['task_id'] = task_to_segment
+            segmented_trajectories.append(segment)
+
+            tasks_segmented_this_episode.add(task_to_segment)
+            current_segment_start_idx = segment_end_idx + 1
+            # Reset all streaks as a new task/segment begins
+            task_close_streaks = {key: 0 for key in task_goal_keys if key not in tasks_segmented_this_episode}
+
+            if not task_close_streaks: 
+                break
+    
+    remaining_task = list(set(task_goal_keys) - tasks_segmented_this_episode)
+    if len(remaining_task) > 0:
+        remaining_task = remaining_task[0]
+    else:
+        remaining_task = None
+
+    # Handle any remaining part of the trajectory
+    if current_segment_start_idx < num_total_steps and len(tasks_segmented_this_episode) < len(task_goal_keys):
+        # print(f"Adding trailing segment from timestep {current_segment_start_idx} to {num_total_steps -1}.")
+        trailing_segment = {}
+        trailing_segment_observations = {}
+
+        # Copy the segment of the trajectory
+        achieved_goal = all_obs_data['achieved_goal'][remaining_task][current_segment_start_idx:]
+        desired_goal = all_obs_data['desired_goal'][remaining_task][current_segment_start_idx:]
+        observation = all_obs_data['observation'][current_segment_start_idx:]
+
+        trailing_segment_observations['achieved_goal'] = {}
+        trailing_segment_observations['achieved_goal'][remaining_task] = achieved_goal
+        trailing_segment_observations['desired_goal'] = {}
+        trailing_segment_observations['desired_goal'][remaining_task] = desired_goal
+
+        trailing_segment_observations['observation'] = observation
+
+        trailing_segment['observations'] = trailing_segment_observations
+        trailing_segment['actions'] = all_actions[current_segment_start_idx:]
+        trailing_segment['rewards'] = all_rewards[current_segment_start_idx:]
+        trailing_segment['terminations'] = all_terminations[current_segment_start_idx:]
+        trailing_segment['truncations'] = all_truncations[current_segment_start_idx:]
+        trailing_segment['task_id'] = remaining_task
+        segmented_trajectories.append(trailing_segment)
+
+    return segmented_trajectories
+
+TASK_KEYS = ['microwave', 'kettle', 'light switch', 'slide cabinet'] 
+PROXIMITY_THRESHOLDS = {
+    'microwave': 0.2,       
+    'kettle': 0.3,         
+    'light switch': 0.2,    
+    'slide cabinet': 0.2   
+}
+STABILITY_DURATION = 20
+
+def split_task(dataset):
+    """
+    Splits the dataset into sub-tasks based on the specified keys and proximity thresholds.
     
     Args:
-        episode: Minari episode object containing observations
-        
+        dataset: A list of trajectories to be segmented.
+    
     Returns:
-        list of str: Completed subtask IDs
-    """
-    # Get observation sequence
-    observations = episode.observations["observation"]
-    
-    initial_state = observations[0]
-    final_state = observations[-1]
-    
-    subtasks = []
-    # Check if microwave is open
-    if final_state[MICROWAVE_IDX] > MICROWAVE_THRESHOLD:
-        subtasks.append("microwave")
-    
-    # Check if kettle has moved
-    kettle_moved = np.linalg.norm(
-        final_state[KETTLE_IDX_X:KETTLE_IDX_Z+1] - 
-        initial_state[KETTLE_IDX_X:KETTLE_IDX_Z+1]
-    ) > KETTLE_MOVE_THRESHOLD
-    if kettle_moved:
-        subtasks.append("kettle")
-    
-    # Check if light switch is on
-    if final_state[LIGHT_SWITCH_IDX] < LIGHT_SWITCH_THRESHOLD:
-        subtasks.append("light")
-    
-    # Check if sliding cabinet is open
-    if final_state[SLIDE_CABINET_IDX] > SLIDE_CABINET_THRESHOLD:
-        subtasks.append("slidecabinet")
-    
-    return subtasks
+        segmented_dataset layout:
+        { 
+            'microwave': [traj, ...],  
+            'kettle': [traj, ...], 
+            ... 
+        }
 
+        Within a traj, the layout looks like the following:
+        { 
+        'task_id': ... 
+        'observations' : { 
+            'achieved_goal': {'task_name': ...} 
+            'desired_goal': {'task_name': ...} 
+            'observation': ... 
+        } 
+        'actions': ... 
+        'rewards': ... 
+        'terminations': ... 
+        'truncations': ... 
+        }
+    """
 
-def determine_task_id(episode):
-    """
-    Determine task ID based on completed subtasks
+    segmented_dataset = defaultdict(list)
+    task_counts = defaultdict(int)
+
+    for i, traj in enumerate(dataset):
+        segmented_traj = segment_trajectory_by_subtasks(
+            traj, 
+            TASK_KEYS,
+            PROXIMITY_THRESHOLDS,
+            STABILITY_DURATION
+        )
+
+        for segment in segmented_traj:
+            task_id = segment['task_id']
+            
+            # cut segment to equal lenght of sliding window 
+            sequences = process_episode(segment)
+            segmented_dataset[task_id].extend(sequences)
+
+            task_counts[task_id] += len(sequences)
+        
+        print('processed trajectory', i, 'of', len(dataset))
     
-    - There may be multiple subtask completed, depending on what the agent decides to do.
-    """
-    try:
-        # Get completed subtasks
-        subtasks = detect_subtasks(episode)
-        
-        # If no subtasks completed, return default task ID
-        if not subtasks:
-            return 0
-        
-        # Determine task ID based on combination of completed subtasks
-        subtask_str = "_".join(sorted(subtasks))
-        
-        # Map to task ID using hash function (0-4)
-        task_id = hash(subtask_str) % 5
-        return task_id
-    
-    except Exception as e:
-        print(f"Error determining task ID: {e}")
-        return 0  # Return default task ID
+    for task_id, num_sequence in task_counts.items():
+        print(f"Task {task_id}: {num_sequence} sequences")
+
+    return segmented_dataset
 
 
 def process_episode(episode, max_len=MAX_LEN):
     """Process a single episode into training sequences"""
-    obs = torch.tensor(episode.observations["observation"][:-1], dtype=torch.float32)
-    acts = torch.tensor(episode.actions, dtype=torch.float32)
-    rews = torch.tensor(episode.rewards, dtype=torch.float32)
+    obs = torch.tensor(episode['observations']["observation"][:-1], dtype=torch.float32)
+    acts = torch.tensor(episode['actions'], dtype=torch.float32)
+    rews = torch.tensor(episode['rewards'], dtype=torch.float32)
     rtg = rews.flip([0]).cumsum(0).flip([0]).unsqueeze(-1)
     prev_acts = torch.cat([torch.zeros_like(acts[:1]), acts[:-1]], dim=0)
     timesteps = torch.arange(len(obs)).unsqueeze(-1)
     
     sequences = []
+    # if the episode is shorter than max_len, add it as a single sequence
     if obs.shape[0] < max_len: 
+        # pad the sequence to max_len
+        pad_len = max_len - obs.shape[0]
+        obs = torch.cat([obs, torch.zeros(max_len - obs.shape[0], obs.shape[1], dtype=obs.dtype)], dim=0)
+        acts = torch.cat([acts, torch.zeros(max_len - acts.shape[0], acts.shape[1], dtype=acts.dtype)], dim=0)
+        rews = torch.cat([rews, torch.zeros(max_len - rews.shape[0], dtype=rews.dtype)], dim=0)
+        rtg = torch.cat([rtg, torch.zeros(max_len - rtg.shape[0], 1, dtype=rtg.dtype)], dim=0)
+        prev_acts = torch.cat([prev_acts, torch.zeros(max_len - prev_acts.shape[0], prev_acts.shape[1], dtype=prev_acts.dtype)], dim=0)
+        timesteps = torch.cat([timesteps, torch.zeros(max_len - timesteps.shape[0], 1, dtype=timesteps.dtype)], dim=0)
+
+        # add the sequence to the list
+        sequences.append({
+            "observations": obs, 
+            "actions": acts,
+            "reward": rews.unsqueeze(-1), 
+            "return_to_go": rtg, 
+            "prev_actions": prev_acts,
+            "timesteps": timesteps,
+        })
         return sequences
         
     for i in range(obs.shape[0] - max_len + 1):
@@ -140,34 +304,6 @@ def process_episode(episode, max_len=MAX_LEN):
             "timesteps": timesteps[i:i+max_len],
         })
     return sequences
-
-
-def organize_data_by_task(dataset, max_len=MAX_LEN):
-    """
-    Organize dataset by task ID using functions 
-    to see what subtask is completed within each trajectory
-    """
-    
-    print("Organizing data by task...")
-    task_datasets = defaultdict(list)
-    task_counts = defaultdict(int)
-    
-    for episode in tqdm(dataset):
-        try:
-            task_id = determine_task_id(episode)
-            task_counts[task_id] += 1
-            
-            # Process episode and add sequences to task dataset
-            sequences = process_episode(episode, max_len)
-            task_datasets[task_id].extend(sequences)
-        except Exception as e:
-            print(f"Error processing episode: {e}")
-            continue
-    
-    for task_id, data in task_datasets.items():
-        print(f"Task {task_id}: {len(data)} sequences, {task_counts[task_id]} episodes")
-    
-    return task_datasets
 
 
 def get_batches(data, batch_size=BATCH_SIZE):
@@ -225,9 +361,11 @@ def main():
     """Main training function implementing Meta-Planning as Inference"""
    
     print("Loading dataset...")
-    dataset = minari.load_dataset("D4RL/kitchen/mixed-v2", download=True)
+    # dataset = minari.load_dataset("D4RL/kitchen/mixed-v2", download=True)
+    dataset = minari.load_dataset("D4RL/kitchen/complete-v2", download=True)
     
-    task_datasets = organize_data_by_task(dataset)
+    # task_datasets = organize_data_by_task(dataset)
+    task_datasets = split_task(dataset)
     
     print("Initializing model...")
     state_dim = dataset[0].observations["observation"].shape[1]
@@ -414,127 +552,6 @@ def main():
         print(f"  Reward loss: {avg_reward_loss:.4f}")
         print(f"  Alpha loss: {avg_alpha_loss:.6f}")
         print(f"  Running average loss: {running_loss:.4f}")
-    
-    print("\nMPI-LL training complete. Generating visualizations...")
-    
-    plt.figure(figsize=(18, 12))
-    
-    # Raw losses
-    plt.subplot(2, 3, 1)
-    plt.plot(losses, alpha=0.3, label="Total loss (raw)")
-    plt.plot(action_losses, alpha=0.3, label="Action loss (raw)")
-    plt.plot(reward_losses, alpha=0.3, label="Reward loss (raw)")
-    plt.xlabel("Training Step")
-    plt.ylabel("Loss")
-    plt.title("Raw Training Losses")
-    plt.legend()
-    plt.grid(True)
-    
-    # Moving average losses
-    plt.subplot(2, 3, 2)
-    window = min(WINDOW_SIZE, len(losses))
-    plt.plot(moving_average(losses, window), label="Total loss (MA)")
-    plt.plot(moving_average(action_losses, window), label="Action loss (MA)")
-    plt.plot(moving_average(reward_losses, window), label="Reward loss (MA)")
-    plt.xlabel("Training Step")
-    plt.ylabel("Loss")
-    plt.title(f"Moving Average (window={window})")
-    plt.legend()
-    plt.grid(True)
-    
-    # Exponential moving average losses
-    plt.subplot(2, 3, 3)
-    plt.plot(exponential_moving_average(losses, SMOOTH_ALPHA), label="Total loss (EMA)")
-    plt.plot(exponential_moving_average(action_losses, SMOOTH_ALPHA), label="Action loss (EMA)")
-    plt.plot(exponential_moving_average(reward_losses, SMOOTH_ALPHA), label="Reward loss (EMA)")
-    plt.xlabel("Training Step")
-    plt.ylabel("Loss")
-    plt.title(f"Exponential Moving Average (alpha={SMOOTH_ALPHA})")
-    plt.legend()
-    plt.grid(True)
-    
-    # Per-task losses
-    plt.subplot(2, 3, 4)
-    for task_id, task_loss in task_losses.items():
-        if task_loss:  # Skip empty lists
-            plt.plot(exponential_moving_average(task_loss, SMOOTH_ALPHA), 
-                    label=f"Task {task_id}")
-    plt.xlabel("Training Step")
-    plt.ylabel("Loss")
-    plt.title("Per-Task Loss (EMA)")
-    plt.legend()
-    plt.grid(True)
-    
-    # Alpha and KL losses
-    plt.subplot(2, 3, 5)
-    plt.plot(exponential_moving_average(alpha_losses, SMOOTH_ALPHA), label="Alpha Loss")
-    plt.plot(exponential_moving_average(kl_losses, SMOOTH_ALPHA), label="KL Loss")
-    plt.xlabel("Training Step")
-    plt.ylabel("Loss")
-    plt.title("Alpha & KL Losses (EMA)")
-    plt.legend()
-    plt.grid(True)
-    
-    # Loss ratio (Action vs Reward)
-    plt.subplot(2, 3, 6)
-    # Calculate ratio of action loss to total loss
-    ratio = np.array(action_losses) / (np.array(action_losses) + np.array(reward_losses) + 1e-8)
-    plt.plot(exponential_moving_average(ratio, SMOOTH_ALPHA), label="Action/(Action+Reward) Ratio")
-    plt.axhline(y=0.5, color='r', linestyle='--', label="Equal contribution")
-    plt.xlabel("Training Step")
-    plt.ylabel("Ratio")
-    plt.title("Action vs Reward Loss Contribution")
-    plt.legend()
-    plt.ylim(0, 1)
-    plt.grid(True)
-    
-    plt.tight_layout()
-    # plt.savefig("mpill_comprehensive_analysis.png", dpi=300)
-    plt.show()
-    
-    plt.figure(figsize=(12, 6))
-    
-    # task performance comparison
-    task_avg_losses = {}
-    for task_id, task_loss in task_losses.items():
-        if task_loss:
-            # Split into first and second half to show improvement
-            half_point = len(task_loss) // 2
-            first_half = task_loss[:half_point]
-            second_half = task_loss[half_point:]
-            
-            task_avg_losses[task_id] = {
-                'overall': np.mean(task_loss),
-                'first_half': np.mean(first_half) if first_half else 0,
-                'second_half': np.mean(second_half) if second_half else 0
-            }
-    
-    # comparative performance
-    task_ids = list(task_avg_losses.keys())
-    if task_ids:
-        overall_avgs = [task_avg_losses[tid]['overall'] for tid in task_ids]
-        first_half_avgs = [task_avg_losses[tid]['first_half'] for tid in task_ids]
-        second_half_avgs = [task_avg_losses[tid]['second_half'] for tid in task_ids]
-        
-        x = np.arange(len(task_ids))
-        width = 0.25
-        
-        plt.bar(x - width, first_half_avgs, width, label='First Half')
-        plt.bar(x, overall_avgs, width, label='Overall')
-        plt.bar(x + width, second_half_avgs, width, label='Second Half')
-        
-        plt.xlabel('Task ID')
-        plt.ylabel('Average Loss')
-        plt.title('Task Performance Comparison')
-        plt.xticks(x, task_ids)
-        plt.legend()
-        plt.grid(True, axis='y')
-        
-        # plt.savefig("mpill_task_comparison.png", dpi=300)
-        plt.show()
-    
-    # torch.save(model.state_dict(), "mpill_model.pt")
-    # print("Model saved and analysis complete.")
 
 if __name__ == "__main__":
     main()
