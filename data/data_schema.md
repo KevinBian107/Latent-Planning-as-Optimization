@@ -91,28 +91,49 @@ graph LR
 end
 ```
 
-Processed sequence schema after sliding window or padding:
+Task Dataset schema:
+```mermaid
+graph LR
+    subgraph TaskDatasetSchema
+        root["task_datasets: dict"]
+
+        root --> task1["microwave: List"]
+        root --> task2["kettle: List"]
+        root --> task3["light switch: List"]
+        root --> task4["slide cabinet: List"]
+
+        task1 --> t1_traj1["[Segmented Trajectory 1, ...]"]
+
+        task2 --> t2_traj1["[Segmented Trajectory 1, ...]"]
+
+        task3 --> t3_traj1["[Segmented Trajectory 1, ...]"]
+
+        task4 --> t4_traj1["[Segmented Trajectory 1, ...]"]
+    end
+```
+
+After we have the above task dataset schema, we will processe the sequences using sliding window or padding, the data shape for each sequence is:
 ```mermaid
 graph LR
     subgraph ProcessedSequenceSchema
-        PS_obs["observations: tensor[MAX_LEN, state_dim]"]
-        PS_actions["actions: tensor[MAX_LEN, action_dim]"]
-        PS_reward["reward: tensor[MAX_LEN, 1]"]
-        PS_rtg["return_to_go: tensor[MAX_LEN, 1]"]
-        PS_prev_actions["prev_actions: tensor[MAX_LEN, action_dim]"]
-        PS_timesteps["timesteps: tensor[MAX_LEN, 1]"]
+        PS_obs["observations: tensor[*H*, state_dim]"]
+        PS_actions["actions: tensor[*H*, action_dim]"]
+        PS_reward["reward: tensor[*H*, 1]"]
+        PS_rtg["return_to_go: tensor[*H*, 1]"]
+        PS_prev_actions["prev_actions: tensor[*H*, action_dim]"]
+        PS_timesteps["timesteps: tensor[*H*, 1]"]
 end
 ```
 
-Batch data schema after assiging sequence to batches:
+The data shape for each batch:
 ```mermaid
 graph LR
     subgraph BatchSchema
-        B_obs["observations: tensor[BATCH_SIZE, MAX_LEN, state_dim]"]
-        B_actions["actions: tensor[BATCH_SIZE, MAX_LEN, action_dim]"]
-        B_reward["reward: tensor[BATCH_SIZE, MAX_LEN, 1]"]
-        B_rtg["return_to_go: tensor[BATCH_SIZE, MAX_LEN, 1]"]
-        B_prev_actions["prev_actions: tensor[BATCH_SIZE, MAX_LEN, action_dim]"]
-        B_timesteps["timesteps: tensor[BATCH_SIZE, MAX_LEN, 1]"]
+        B_obs["observations: tensor[BATCH_SIZE, *H*, state_dim]"]
+        B_actions["actions: tensor[BATCH_SIZE, *H*, action_dim]"]
+        B_reward["reward: tensor[BATCH_SIZE, *H*, 1]"]
+        B_rtg["return_to_go: tensor[BATCH_SIZE, *H*, 1]"]
+        B_prev_actions["prev_actions: tensor[BATCH_SIZE, *H*, action_dim]"]
+        B_timesteps["timesteps: tensor[BATCH_SIZE, *H*, 1]"]
 end
 ```
