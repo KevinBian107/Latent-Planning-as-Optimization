@@ -13,7 +13,7 @@ import warnings
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from src.models.MPILL import MPILearningLearner
 
@@ -653,7 +653,9 @@ def main():
         plt.show()
     else:
         print("No per-task data to visualize.")
-
+    
+    torch.save(model.state_dict(), "mpill.pt")
+    print("Model saved and analysis complete.")
 
 if __name__ == "__main__":
     main()

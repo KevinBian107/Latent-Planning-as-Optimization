@@ -579,8 +579,5 @@ def main():
         # plt.savefig("lpt_task_comparison.png", dpi=300)
         plt.show()
 
-    torch.save(model.state_dict(), "mpill.pt")
-    print("Model saved and analysis complete.")
-
 if __name__ == "__main__":
     main()
