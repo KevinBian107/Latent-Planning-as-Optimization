@@ -5,6 +5,7 @@ from typing import Optional
 from src.models.unet1d import Unet1D
 from src.models.conditional_decision_transformer import ConditionalDecisionTransformer
 from src.models.alpha_networks import MLPGenerator
+import pdb
 
 class Swish(nn.Module):
     """Simple Swish activation function"""
@@ -27,14 +28,14 @@ class InferenceEncoder(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int):
         super().__init__()
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),  # Input: [B, input_dim], Output: [B, hidden_dim]
+            nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),  # Input: [B, hidden_dim], Output: [B, hidden_dim]
+            nn.Linear(hidden_dim, hidden_dim), 
             nn.ReLU()
         )
-        # Mean and log standard deviation outputs
-        self.mu = nn.Linear(hidden_dim, hidden_dim)  # Input: [B, hidden_dim], Output: [B, hidden_dim]
-        self.logstd = nn.Linear(hidden_dim, hidden_dim)  # Input: [B, hidden_dim], Output: [B, hidden_dim]
+        
+        self.mu = nn.Linear(hidden_dim, hidden_dim) 
+        self.logstd = nn.Linear(hidden_dim, hidden_dim)
 
     def forward(self, x: torch.Tensor):
         """
@@ -47,9 +48,9 @@ class InferenceEncoder(nn.Module):
             mu: Mean of distribution [B, hidden_dim]
             std: Standard deviation of distribution [B, hidden_dim]
         """
-        h = self.encoder(x)  # [B, hidden_dim]
-        mu = self.mu(h)  # [B, hidden_dim]
-        std = torch.exp(torch.clamp(self.logstd(h), -10, 2))  # [B, hidden_dim], clamped for stability
+        h = self.encoder(x) 
+        mu = self.mu(h) 
+        std = torch.exp(torch.clamp(self.logstd(h), -10, 2))
         return mu, std
 
 
@@ -58,13 +59,13 @@ class LLDecoder(nn.Module):
     def __init__(self, zeta_dim: int, alpha_dim: int, hidden_dim: int):
         super().__init__()
         self.decoder = nn.Sequential(
-            nn.Linear(zeta_dim, hidden_dim),  # Input: [B, zeta_dim], Output: [B, hidden_dim]
+            nn.Linear(zeta_dim, hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),  # Input: [B, hidden_dim], Output: [B, hidden_dim]
+            nn.Linear(hidden_dim, hidden_dim),
             nn.ReLU()
         )
-        self.mu = nn.Linear(hidden_dim, alpha_dim)  # Input: [B, hidden_dim], Output: [B, alpha_dim]
-        self.logstd = nn.Linear(hidden_dim, alpha_dim)  # Input: [B, hidden_dim], Output: [B, alpha_dim]
+        self.mu = nn.Linear(hidden_dim, alpha_dim)
+        self.logstd = nn.Linear(hidden_dim, alpha_dim)
 
     def forward(self, zeta: torch.Tensor):
         """
@@ -77,9 +78,9 @@ class LLDecoder(nn.Module):
             mu_alpha: Mean of alpha distribution [B, alpha_dim]
             std_alpha: Standard deviation of alpha distribution [B, alpha_dim]
         """
-        h = self.decoder(zeta)  # [B, hidden_dim]
-        mu_alpha = self.mu(h)  # [B, alpha_dim]
-        std_alpha = torch.exp(torch.clamp(self.logstd(h), -10, 2))  # [B, alpha_dim]
+        h = self.decoder(zeta)
+        mu_alpha = self.mu(h)
+        std_alpha = torch.exp(torch.clamp(self.logstd(h), -10, 2))
         return mu_alpha, std_alpha
 
 
@@ -161,8 +162,9 @@ class MPILearningLearner(nn.Module):
         """
         B, T, _ = states.shape
         
-        # Expand rewards to match sequence length
-        returns = rewards[:, -1:].expand(-1, T, 1)  # [B, T, 1]
+        # returns = torch.sum(rewards, dim=2).unsqueeze(-1)
+        returns = rewards[:,:,-1:]
+        # pdb.set_trace()
         
         traj = torch.cat([states, actions, returns], dim=-1)  # [B, T, state_dim+act_dim+1]
         traj = traj.reshape(B, -1)  # [B, T*(state_dim+act_dim+1)]
@@ -197,7 +199,8 @@ class MPILearningLearner(nn.Module):
             z_reshaped = z.view(z0.size(0), self.n_latent, self.alpha_dim) # [B, n_latent, alpha_dim]
             
             pred_reward = self.reward_head(z).squeeze(-1) # [B]
-            reward_loss = F.mse_loss(pred_reward, rewards[:, -1, 0]) # Scalar
+            returns = rewards[:,:,-1:] #torch.sum(rewards, dim=2).unsqueeze(-1)
+            reward_loss = F.mse_loss(pred_reward, returns) # Scalar
             
             pred_action, _ = self.trajectory_generator(timesteps, states, actions, z_reshaped) # [B, act_dim]
             action_loss = F.mse_loss(pred_action, actions[:, -1, :]) # Scalar

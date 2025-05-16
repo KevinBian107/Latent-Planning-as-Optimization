@@ -454,6 +454,7 @@ def main():
                 
                 # print('TEST', alpha_prime) should be same for each task in one batch_group
                 
+                # 16 batch, 20 timesetp, and 59 observations
                 pred_action, pred_reward, alpha_k, alpha_loss, kl, mu_alpha, _ = model(
                     task_batch["observations"],
                     task_batch["prev_actions"],
@@ -506,7 +507,6 @@ def main():
                 # Collect for α′ update, average acros timesteps
                 # 
                 task_alpha_vals[tid] = mu_alpha.mean(dim=0).detach()
-                pdb.set_trace()
 
                 print(f"  Task {tid}: Loss={lv:.4f}, RunAvg={running_loss:.4f}, "
                       f"A-Loss={av:.4f}, R-Loss={rv:.4f}, α-Loss={avloss:.6f}")

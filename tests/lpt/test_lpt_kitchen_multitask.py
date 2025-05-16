@@ -34,134 +34,6 @@ SMOOTH_ALPHA = 0.05  # Exponential moving average smoothing factor
 
 context_len = MAX_LEN
 
-# MICROWAVE_IDX = 31    # Microwave door position index
-# KETTLE_IDX_X = 32     # Kettle x-coordinate index
-# KETTLE_IDX_Y = 33     # Kettle y-coordinate index
-# KETTLE_IDX_Z = 34     # Kettle z-coordinate index
-# LIGHT_SWITCH_IDX = 26 # Light switch position index
-# SLIDE_CABINET_IDX = 28 # Sliding cabinet door position index
-
-# MICROWAVE_THRESHOLD = 0.2      # Threshold for open microwave
-# KETTLE_MOVE_THRESHOLD = 0.1    # Threshold for moved kettle
-# LIGHT_SWITCH_THRESHOLD = -0.6  # Threshold for on light switch
-# SLIDE_CABINET_THRESHOLD = 0.2  # Threshold for open sliding cabinet
-
-# def detect_subtasks(episode):
-#     """
-#     Detect which subtasks are completed in a trajectory
-    
-#     Args:
-#         episode: Minari episode object containing observations
-        
-#     Returns:
-#         list of str: Completed subtask IDs
-#     """
-#     # Get observation sequence
-#     observations = episode.observations["observation"]
-    
-#     # Get initial and final states
-#     initial_state = observations[0]
-#     final_state = observations[-1]
-    
-#     # Check for completed subtasks
-#     subtasks = []
-    
-#     # Check if microwave is open
-#     if final_state[MICROWAVE_IDX] > MICROWAVE_THRESHOLD:
-#         subtasks.append("microwave")
-    
-#     # Check if kettle has moved
-#     kettle_moved = np.linalg.norm(
-#         final_state[KETTLE_IDX_X:KETTLE_IDX_Z+1] - 
-#         initial_state[KETTLE_IDX_X:KETTLE_IDX_Z+1]
-#     ) > KETTLE_MOVE_THRESHOLD
-#     if kettle_moved:
-#         subtasks.append("kettle")
-    
-#     # Check if light switch is on
-#     if final_state[LIGHT_SWITCH_IDX] < LIGHT_SWITCH_THRESHOLD:
-#         subtasks.append("light")
-    
-#     # Check if sliding cabinet is open
-#     if final_state[SLIDE_CABINET_IDX] > SLIDE_CABINET_THRESHOLD:
-#         subtasks.append("slidecabinet")
-    
-#     return subtasks
-
-
-# def determine_task_id(episode):
-#     """Determine task ID based on completed subtasks"""
-#     try:
-#         # Get completed subtasks
-#         subtasks = detect_subtasks(episode)
-        
-#         # If no subtasks completed, return default task ID
-#         if not subtasks:
-#             return 0
-        
-#         # Determine task ID based on combination of completed subtasks
-#         subtask_str = "_".join(sorted(subtasks))
-        
-#         # Map to task ID using hash function (0-4)
-#         task_id = hash(subtask_str) % 5
-#         return task_id
-    
-#     except Exception as e:
-#         print(f"Error determining task ID: {e}")
-#         return 0  # Return default task ID
-
-
-# def process_episode(episode, max_len=MAX_LEN):
-#     """Process a single episode into training sequences"""
-#     observations = torch.tensor(episode.observations["observation"][:-1], dtype=torch.float32).to(device)
-#     actions = torch.tensor(episode.actions, dtype=torch.float32).to(device)
-#     rew = torch.tensor(episode.rewards, dtype=torch.float32).to(device)
-#     done = torch.tensor(episode.terminations, dtype=torch.bool).to(device)
-
-#     rtg = rew.flip(dims=[0]).cumsum(dim=0).flip(dims=[0]).unsqueeze(-1)
-#     prev_act = torch.cat([torch.zeros_like(actions[:1]), actions[:-1]], dim=0)
-#     timesteps = torch.arange(len(observations), dtype=torch.long, device=device).unsqueeze(-1)
-
-#     sequences = []
-#     if observations.shape[0] < max_len:
-#         return sequences
-
-#     for i in range(observations.shape[0] - max_len + 1):
-#         sequences.append({
-#             "observations": observations[i:i+max_len],
-#             "actions": actions[i:i+max_len],
-#             "reward": rew[i:i+max_len].unsqueeze(-1),
-#             "done": done[i:i+max_len].unsqueeze(-1),
-#             "return_to_go": rtg[i:i+max_len],
-#             "prev_actions": prev_act[i:i+max_len],
-#             "timesteps": timesteps[i:i+max_len],
-#         })
-#     return sequences
-
-
-# def organize_data_by_task(dataset, max_len=MAX_LEN):
-#     """Organize dataset by task ID"""
-#     print("Organizing data by task...")
-#     task_datasets = defaultdict(list)
-#     task_counts = defaultdict(int)
-    
-#     for episode in tqdm(dataset):
-#         try:
-#             task_id = determine_task_id(episode)
-#             task_counts[task_id] += 1
-            
-#             # Process episode and add sequences to task dataset
-#             sequences = process_episode(episode, max_len)
-#             task_datasets[task_id].extend(sequences)
-#         except Exception as e:
-#             print(f"Error processing episode: {e}")
-#             continue
-    
-#     for task_id, data in task_datasets.items():
-#         print(f"Task {task_id}: {len(data)} sequences, {task_counts[task_id]} episodes")
-    
-#     return task_datasets
-
 
 def segment_trajectory_by_subtasks(
     full_episode, 
@@ -707,8 +579,8 @@ def main():
         # plt.savefig("lpt_task_comparison.png", dpi=300)
         plt.show()
 
-    # torch.save(model.state_dict(), "lpt_task_sequential_model.pt")
-    # print("Model saved and analysis complete.")
+    torch.save(model.state_dict(), "mpill.pt")
+    print("Model saved and analysis complete.")
 
 if __name__ == "__main__":
     main()

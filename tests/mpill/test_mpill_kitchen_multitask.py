@@ -38,85 +38,6 @@ LR_REWARD = 1e-4   # η_γ
 WINDOW_SIZE = 10  # Window size for moving average
 SMOOTH_ALPHA = 0.05  # Exponential moving average smoothing factor
 
-# MICROWAVE_IDX = 31    # Index for microwave door position
-# KETTLE_IDX_X = 32     # Index for kettle x-coordinate
-# KETTLE_IDX_Y = 33     # Index for kettle y-coordinate
-# KETTLE_IDX_Z = 34     # Index for kettle z-coordinate
-# LIGHT_SWITCH_IDX = 26 # Index for light switch position
-# SLIDE_CABINET_IDX = 28 # Index for sliding cabinet door position
-
-# MICROWAVE_THRESHOLD = 0.2      # Threshold for considering microwave open
-# KETTLE_MOVE_THRESHOLD = 0.1    # Threshold for considering kettle moved
-# LIGHT_SWITCH_THRESHOLD = -0.6  # Threshold for considering light switch on
-# SLIDE_CABINET_THRESHOLD = 0.2  # Threshold for considering sliding cabinet open
-
-
-# def detect_subtasks(episode):
-#     """
-#     Detect which subtasks are completed in a trajectory
-    
-#     Args:
-#         episode: Minari episode object containing observations
-        
-#     Returns:
-#         list of str: Completed subtask IDs
-#     """
-#     # Get observation sequence
-#     observations = episode.observations["observation"]
-    
-#     initial_state = observations[0]
-#     final_state = observations[-1]
-    
-#     subtasks = []
-#     # Check if microwave is open
-#     if final_state[MICROWAVE_IDX] > MICROWAVE_THRESHOLD:
-#         subtasks.append("microwave")
-    
-#     # Check if kettle has moved
-#     kettle_moved = np.linalg.norm(
-#         final_state[KETTLE_IDX_X:KETTLE_IDX_Z+1] - 
-#         initial_state[KETTLE_IDX_X:KETTLE_IDX_Z+1]
-#     ) > KETTLE_MOVE_THRESHOLD
-#     if kettle_moved:
-#         subtasks.append("kettle")
-    
-#     # Check if light switch is on
-#     if final_state[LIGHT_SWITCH_IDX] < LIGHT_SWITCH_THRESHOLD:
-#         subtasks.append("light")
-    
-#     # Check if sliding cabinet is open
-#     if final_state[SLIDE_CABINET_IDX] > SLIDE_CABINET_THRESHOLD:
-#         subtasks.append("slidecabinet")
-    
-#     return subtasks
-
-
-# def determine_task_id(episode):
-#     """
-#     Determine task ID based on completed subtasks
-    
-#     - There may be multiple subtask completed, depending on what the agent decides to do.
-#     """
-#     try:
-#         # Get completed subtasks
-#         subtasks = detect_subtasks(episode)
-        
-#         # If no subtasks completed, return default task ID
-#         if not subtasks:
-#             return 0
-        
-#         # Determine task ID based on combination of completed subtasks
-#         subtask_str = "_".join(sorted(subtasks))
-        
-#         # Map to task ID using hash function (0-4)
-#         task_id = hash(subtask_str) % 5
-#         return task_id
-    
-#     except Exception as e:
-#         print(f"Error determining task ID: {e}")
-#         return 0  # Return default task ID
-
-
 def segment_trajectory_by_subtasks(
     full_episode, 
     task_goal_keys, 
@@ -383,34 +304,6 @@ def process_episode(episode, max_len=MAX_LEN):
             "timesteps": timesteps[i:i+max_len],
         })
     return sequences
-
-
-# def organize_data_by_task(dataset, max_len=MAX_LEN):
-#     """
-#     Organize dataset by task ID using functions 
-#     to see what subtask is completed within each trajectory
-#     """
-    
-#     print("Organizing data by task...")
-#     task_datasets = defaultdict(list)
-#     task_counts = defaultdict(int)
-    
-#     for episode in tqdm(dataset):
-#         try:
-#             task_id = determine_task_id(episode)
-#             task_counts[task_id] += 1
-            
-#             # Process episode and add sequences to task dataset
-#             sequences = process_episode(episode, max_len)
-#             task_datasets[task_id].extend(sequences)
-#         except Exception as e:
-#             print(f"Error processing episode: {e}")
-#             continue
-    
-#     for task_id, data in task_datasets.items():
-#         print(f"Task {task_id}: {len(data)} sequences, {task_counts[task_id]} episodes")
-    
-#     return task_datasets
 
 
 def get_batches(data, batch_size=BATCH_SIZE):

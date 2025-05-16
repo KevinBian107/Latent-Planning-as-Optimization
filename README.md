@@ -117,7 +117,9 @@ You can debug in a one-off container using interactive bash shell:
 docker compose run --service-ports mpi bash
 ```
 
-
+## Tests File 🤔
+ We have created multiple [test files](https://github.com/KevinBian107/Meta-Planning-as-Inference/tree/main/tests) that tests the functionality of each part of our system, some of the are calling our main refactored `trainer` function directly and some are single file runable files. In the end they will all be calling the refactored `trainer` code and get converted to PyTests.
+`
 ## Acknowledgements
 
 The decision transformer model implementation advices code from the [official repository of DT](https://github.com/kzl/decision-transformer) .
