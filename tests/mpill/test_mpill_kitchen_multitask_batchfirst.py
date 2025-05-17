@@ -23,7 +23,7 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
 
 device = torch.device("cpu")
 
-MAX_LEN = 20 # Horizon length
+MAX_LEN = 128 # Horizon length
 HIDDEN_SIZE = 512
 BATCH_SIZE = 16
 N_EPOCHS = 20
@@ -171,7 +171,7 @@ def segment_trajectory_by_subtasks(
     # Handle any remaining part of the trajectory
     if current_segment_start_idx < num_total_steps and len(tasks_segmented_this_episode) < len(task_goal_keys):
         # print(f"Adding trailing segment from timestep {current_segment_start_idx} to {num_total_steps -1}.")
-        trailing_segment = {}
+        trailing_segment = {} 
         trailing_segment_observations = {}
 
         # Copy the segment of the trajectory
