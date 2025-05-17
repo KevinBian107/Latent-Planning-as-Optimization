@@ -18,12 +18,12 @@ device = (
 )
 
 # ───────────────────────── params ─────────────────────────
-MAX_LEN, HIDDEN_SIZE, N_LAYER, N_HEAD = 15, 32, 3, 1
+MAX_LEN, HIDDEN_SIZE, N_LAYER, N_HEAD = 15, 2, 3, 1
 BATCH_SIZE = 16                     # windows in inner‑loop batches
 NUM_META_ITERS = 2000               # ── MAML: outer steps
 META_BATCH_SIZE = 4                 # ── MAML: tasks per outer step
-K_INNER = 5                         # ── MAML: gradient steps
-Q_QUERY = 16                        # ── MAML: query windows
+K_INNER = 3                         # ── MAML: gradient steps
+Q_QUERY = 10                        # ── MAML: query windows
 INNER_LR = 1e-3                     # ── MAML
 OUTER_LR = 1e-4
 LATENT_DIM = 8                      # if you sample z0; adjust to your model
@@ -32,14 +32,14 @@ SMOOTH_ALPHA = 0.05
 
 context_len = MAX_LEN   # for model ctor
 
-# ───────────────────── kitchen indices & thresholds (unchanged) ───────────────
+# ───────────────────── kitchen indices & thresholds ───────────────
 MICROWAVE_IDX = 31
 KETTLE_IDX_X, KETTLE_IDX_Y, KETTLE_IDX_Z = 32, 33, 34
 LIGHT_SWITCH_IDX, SLIDE_CABINET_IDX = 26, 28
 MICROWAVE_THRESHOLD, KETTLE_MOVE_THRESHOLD = 0.2, 0.1
 LIGHT_SWITCH_THRESHOLD, SLIDE_CABINET_THRESHOLD = -0.6, 0.2
 
-# ───────────────────── helper functions (unchanged) ───────────────────────────
+# ───────────────────── helper functions ───────────────────────────
 def detect_subtasks(ep):
     obs = ep.observations["observation"]
     init, final = obs[0], obs[-1]
@@ -120,7 +120,7 @@ def main():
     
     outer_opt = torch.optim.Adam(model.parameters(), lr=OUTER_LR)
 
-    # ── arrays for plotting ──
+
     meta_total_losses, meta_a_losses, meta_r_losses = [], [], []
     task_losses = {tid: [] for tid in task_data}
 
