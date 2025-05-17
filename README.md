@@ -1,9 +1,11 @@
 # Meta Planning as Inference
 This repository is designed to tackle **continual learning** problems with **long horizon planning**. We try to leverages probabilistic inference along with meta-learning to build offline learning algorithms capable of learning multipl tasks and creating its own diverse strategies, achieving the so-called "learning to learn".
 
-### Installation
+## Tests File 🤔
+We have created multiple [test files](https://github.com/KevinBian107/Meta-Planning-as-Inference/tree/main/tests) that tests the functionality of each part of our system, some of the are calling our main refactored `trainer` function directly and some are single file runable files. In the end they will all be calling the refactored `trainer` code and get converted to PyTests.
 
-#### Conda Setup Guide
+## Installation
+### Conda Setup Guide
 
 1. **Clone the Repository**
 
@@ -59,7 +61,7 @@ You can check if your installation is correct by running the following test file
 python tests/test_mpill_kitchen_seq.py
 ```
 
-#### Docker Setup Guide
+### Docker Setup Guide
 
 1. **Install Docker, Docker Compose, and NVIDIA Container Toolkit** (Skip this step if already installed):
 
@@ -117,9 +119,6 @@ You can debug in a one-off container using interactive bash shell:
 docker compose run --service-ports mpi bash
 ```
 
-## Tests File 🤔
- We have created multiple [test files](https://github.com/KevinBian107/Meta-Planning-as-Inference/tree/main/tests) that tests the functionality of each part of our system, some of the are calling our main refactored `trainer` function directly and some are single file runable files. In the end they will all be calling the refactored `trainer` code and get converted to PyTests.
-`
 ## Acknowledgements
 
 The decision transformer model implementation advices code from the [official repository of DT](https://github.com/kzl/decision-transformer) .

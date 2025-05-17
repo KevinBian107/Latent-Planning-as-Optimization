@@ -5,11 +5,15 @@ import numpy as np
 
 import sys
 import os
-os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(os.getcwd())
+# os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# sys.path.append(os.getcwd())
+# print("Current working directory:", os.getcwd())
+
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 # Load model
-model = torch.load("results/weights/lpt_model.pt", map_location="cpu",weights_only=False)  # or to('cuda')
+model = torch.load("results/weights/mpill.pt", map_location="cpu",weights_only=False)  # or to('cuda')
 model.device = torch.device("cpu")
 model.eval()
 
