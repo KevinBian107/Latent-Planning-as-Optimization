@@ -90,6 +90,7 @@ class MPILearningLearner(nn.Module):
                  state_dim: int,
                  act_dim: int,
                  context_len: int,
+                 hyper_h_dim: int = 1024,
                  h_dim: int = 128,
                  n_blocks: int = 4,
                  n_heads: int = 2,
@@ -113,12 +114,12 @@ class MPILearningLearner(nn.Module):
         # Learning Learner encoder: q_φ(ζ | τ, y)
         # Input: flattened trajectory [B, input_size]
         # Output: parameters for distribution over ζ
-        self.ll_encoder = InferenceEncoder(input_size, hidden_dim=h_dim).to(self.device)
+        self.ll_encoder = InferenceEncoder(input_size, hidden_dim=hyper_h_dim).to(self.device)
         
         # Learning Learner decoder: G_ψ(ζ) → μ_α, σ_α
         # Input: latent code ζ [B, h_dim]
         # Output: parameters for distribution over α
-        self.ll_decoder = LLDecoder(zeta_dim=h_dim, alpha_dim=self.alpha_dim, hidden_dim=h_dim).to(self.device)
+        self.ll_decoder = LLDecoder(zeta_dim=hyper_h_dim, alpha_dim=self.alpha_dim, hidden_dim=hyper_h_dim).to(self.device)
         
         # Generator conditioned on α₀
         # Input: random z0 [B, z_dim] and α [B, alpha_dim]

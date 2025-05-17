@@ -23,8 +23,9 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
 
 device = torch.device("cpu")
 
-MAX_LEN = 20 # Horizon length
-HIDDEN_SIZE = 512
+MAX_LEN = 128 # Horizon length
+HIDDEN_SIZE = 128
+HYPER_HIDDEN_SIZE = 1024
 BATCH_SIZE = 16
 N_EPOCHS = 20
 ALPHA_P_MOMENTUM = 0.99  # Slow learning
@@ -373,6 +374,7 @@ def main():
         state_dim=state_dim,
         act_dim=act_dim,
         context_len=MAX_LEN,
+        hyper_h_dim = HYPER_HIDDEN_SIZE,
         h_dim=HIDDEN_SIZE,
         device=device
     ).to(device)
