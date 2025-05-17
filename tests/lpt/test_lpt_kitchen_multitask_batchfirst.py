@@ -8,7 +8,7 @@ import minari
 from collections import defaultdict
 
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 from src.models.LPT import LatentPlannerModel
 
@@ -21,7 +21,7 @@ device = torch.device("cpu")
 os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(os.getcwd())
 
-MAX_LEN = 15
+MAX_LEN = 128
 HIDDEN_SIZE = 16
 N_LAYER = 3
 N_HEAD = 1
