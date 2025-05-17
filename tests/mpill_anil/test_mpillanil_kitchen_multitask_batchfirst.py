@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from src.models.MPILL import MPILearningLearner
+from src.models.MPILL_ANIL import MPILL_ANIL
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
@@ -26,6 +26,7 @@ device = torch.device("cpu")
 MAX_LEN = 128 # Horizon length
 HIDDEN_SIZE = 128
 HYPER_HIDDEN_SIZE = 1024
+
 BATCH_SIZE = 16
 N_EPOCHS = 20
 ALPHA_P_MOMENTUM = 0.99  # Slow learning
@@ -370,7 +371,7 @@ def main():
     print("Initializing model...")
     state_dim = dataset[0].observations["observation"].shape[1]
     act_dim   = dataset[0].actions.shape[1]
-    model = MPILearningLearner(
+    model = MPILL_ANIL(
         state_dim=state_dim,
         act_dim=act_dim,
         context_len=MAX_LEN,
@@ -378,6 +379,7 @@ def main():
         h_dim=HIDDEN_SIZE,
         device=device
     ).to(device)
+
 
     beta_params  = list(model.trajectory_generator.parameters())
     gamma_params = list(model.reward_head.parameters())
