@@ -375,9 +375,11 @@ def main():
         state_dim=state_dim,
         act_dim=act_dim,
         context_len=MAX_LEN,
+        hyper_h_dim = HYPER_HIDDEN_SIZE,
         h_dim=HIDDEN_SIZE,
         device=device
     ).to(device)
+
 
     beta_params  = list(model.trajectory_generator.parameters())
     gamma_params = list(model.reward_head.parameters())
