@@ -50,7 +50,7 @@ class LLDecoder(nn.Module):
 
 
 class MPILL_ANIL(nn.Module):
-    def __init__(self, state_dim, act_dim, context_len, h_dim=128, n_blocks=4, n_heads=2,
+    def __init__(self, state_dim, act_dim, context_len,hyper_h_dim: int = 1024, h_dim=128, n_blocks=4, n_heads=2,
                  drop_p=0.1, n_latent=4, device=None, z_n_iters=3, langevin_step_size=0.3, noise_factor=1.0):
         super().__init__()
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -62,8 +62,8 @@ class MPILL_ANIL(nn.Module):
 
         input_size = (state_dim + act_dim + 1) * context_len
 
-        self.ll_encoder = InferenceEncoder(input_size, hidden_dim=h_dim).to(self.device)
-        self.ll_decoder = LLDecoder(zeta_dim=h_dim, alpha_dim=self.alpha_dim, hidden_dim=h_dim).to(self.device)
+        self.ll_encoder = InferenceEncoder(input_size, hidden_dim=hyper_h_dim).to(self.device)
+        self.ll_decoder = LLDecoder(zeta_dim=hyper_h_dim, alpha_dim=self.alpha_dim, hidden_dim=hyper_h_dim).to(self.device)
         assert self.alpha_dim % 2 == 0, "alpha_dim must be divisible by 2 for ANIL-style chunking"
         self.generator = ANILGenerator(
             z_dim=self.z_dim,
