@@ -1,45 +1,58 @@
-Minari Dataset segment task dataflow graph:
+Dataflow:
 
 ```mermaid
-graph LR
-    %% Load and Start
-    A1["Minari Dataset"] --> B1["split_task()"]
+flowchart TD
+    %% High level flow
+    RawData[Raw Data downloaded from any source] --> DatasetAdapter
+    DatasetAdapter --> DataProcessor
+    DataProcessor --> ProcessedData
+    ProcessedData --> BatchGenerator
+    BatchGenerator --> TrainingBatches[Ready for model input]
+
+    %% Key components expanded
+    subgraph DatasetAdapter[TrajectoryDataset]
+        DA_Custom["Your Custom preprocessing function to adapt to pipeline"]
+    end
     
-    %% Split into subtrajectories
-    B1 --> C1["segment_trajectory_by_subtasks()"]
-    C1 --> C2["4 task trajectories per episode"]
+    subgraph DataProcessor[Data Processing Pipeline]
+        DP_Process["Create your custom processing pipeline function"]
+        DP_Registry["Register your pipeline with pipline name"]
+    end
 
-    %% Sliding window or padding
-    C2 --> D1["process_episode()"]
-    D1 --> D2{"Length > Horizon *H*?"}
-    D2 -- Yes --> D3["Split the trajectory with sliding window"]
-    D2 -- No --> D4["Pad with Zeros to *H*"]
-
-    %% Processed sequences
-    D3 --> E1["processed sequence"]
-    D4 --> E1
-
-    %% Group by task
-    E1 --> F1["Group into 4 task"]
-
-    F1 --> G1["get_batches"]
-
-    %% Batch creation
-    G1 --> H1["Create batch within each task"]
-
-    %% Model Input
-    H1 --> I1["Model input (Batch)"]
-
-    %% Styling
-    classDef main fill:#e6fffa,stroke:#333,stroke-width:2px
-    classDef decision fill:#fff0e6,stroke:#333,stroke-width:1px
-    classDef output fill:#ffffe6,stroke:#333,stroke-width:2px
-    classDef function fill:#ffe6fa,stroke:#333,stroke-width:1px
-
-    class A1 main
-    class B1,C1,D1,G1 function
-    class I1 output
-    class D2 decision
+    subgraph Processors[Processor Components]
+        direction TB
+        PC_Base["BaseProcessor Interface <br> process()"]
+        PC_Base -.->|implement| PC_Segment["Segmentation Processor"]
+        PC_Base -.->|implement| PC_Sequence["Sequence Processor"]
+        PC_Base -.->|implement| PC_Custom["Your Custom Processors"]
+    end
+    
+    Processors -->|pass in| DataProcessor
+    
+    subgraph ProcessedData[Processed Data Structure]
+        PD_Dict["Dict<br>[task_id, List[sequences]]"]
+        PD_Sequence["Sequence = <br>{observations: tensor,<br>actions: tensor,<br>reward: tensor,<br>return_to_go: tensor,<br>prev_actions: tensor,<br>timesteps: tensor}"]
+        PD_Dict --> PD_Sequence
+    end
+    
+    subgraph BatchGenerator[Batch Generation]
+        BG_Create["Creates task-specific batches"]
+        BG_Iterate["Yields batches for model training"]
+    end
+    
+    %% Extension points
+    ExtensionPoints1["Your Task Split Logic"] -.->|replace| PC_Segment
+    ExtensionPoints2["Your Process Sequence Logic"] -.->|replace| PC_Sequence
+    
+    classDef interface fill:#f9f,stroke:#333,stroke-width:1px
+    classDef component fill:#bbdefb,stroke:#333,stroke-width:1px
+    classDef dataStructure fill:#c8e6c9,stroke:#333,stroke-width:1px
+    classDef extensionPoint fill:#ffe0b2,stroke:#333,stroke-width:1px,stroke-dasharray: 5 5
+    
+    class DA_Preprocess,PC_Base interface
+    class RawData,DatasetAdapter,DataProcessor,BatchGenerator,BG_Create,BG_Iterate component
+    class ProcessedData,PD_Dict,PD_Sequence dataStructure
+    class ExtensionPoints1,ExtensionPoints2,DA_Custom,PC_Custom extensionPoint
 ```
 
 Minari Kitchen Dataset Schema:
@@ -60,14 +73,10 @@ graph LR
         observations --> obs["observation: array[T+1, state_dim]"]
 
         achieved --> ag_1["Task 1: array[T, ag_dim_1]"]
-        achieved --> ag_2["Task 2: array[T, ag_dim_2]"]
-        achieved --> ag_3["Task 3: array[T, ag_dim_3]"]
-        achieved --> ag_4["Task 4: array[T, ag_dim_4]"]
+        achieved --> ag_2["..."]
 
         desired --> dg_1["Task 1: array[T, dg_dim_1]"]
-        desired --> dg_2["Task 2: array[T, dg_dim_2]"]
-        desired --> dg_3["Task 3: array[T, dg_dim_3]"]
-        desired --> dg_4["Task 4: array[T, dg_dim_4]"]
+        desired --> dg_2["..."]
 
     %% Note on time and dimensions
     note1["Notes: T = timesteps <br> ag_dim = achieved_goal dimension <br> dg_dim = desired_goal dimension"]:::noteStyle
@@ -102,17 +111,17 @@ graph LR
         root --> task3["light switch: List"]
         root --> task4["slide cabinet: List"]
 
-        task1 --> t1_traj1["[Segmented Trajectory 1, ...]"]
+        task1 --> t1_traj1["[Trajectory 1, ...]"]
 
-        task2 --> t2_traj1["[Segmented Trajectory 1, ...]"]
+        task2 --> t2_traj1["[Trajectory 1, ...]"]
 
-        task3 --> t3_traj1["[Segmented Trajectory 1, ...]"]
+        task3 --> t3_traj1["[Trajectory 1, ...]"]
 
-        task4 --> t4_traj1["[Segmented Trajectory 1, ...]"]
+        task4 --> t4_traj1["[Trajectory 1, ...]"]
     end
 ```
 
-After we have the above task dataset schema, we will processe the sequences using sliding window or padding, the data shape for each sequence is:
+After we have the above task dataset schema, we will processe the trajectory using sliding window or padding, the data shape for each sequence is:
 ```mermaid
 graph LR
     subgraph ProcessedSequenceSchema

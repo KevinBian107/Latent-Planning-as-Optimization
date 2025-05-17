@@ -1,7 +1,8 @@
-from data.dataset import MinariSequenceDataset
+from data.legacy_data_code.dataset import MinariSequenceDataset
 from torch.utils.data import DataLoader
 
-def process_dataloader(env_name,args):
+
+def process_dataloader(env_name, args, multi_task=False):
     try:
         # Map the environment name to a dataset download name.
         env_name_list = env_name.split('-')
