@@ -1,46 +1,96 @@
+import numpy as np
 import torch
-from torch.utils.data import DataLoader, Dataset
-import minari
-from tqdm import tqdm
+from abc import ABC, abstractmethod
+from torch.utils.data import Dataset, DataLoader
 
-class MinariSequenceDataset(Dataset):
-    def __init__(self, context_len, name, device="cpu"):
-        self.context_len = context_len
-        self.device = device
-        self.sequence_data = []
-        self.name = name
-        self._load()
+'''---Base class for trajectory dataset---'''
+class TrajectoryDataset(ABC):
+    """Abstract base class for trajectory datasets."""
+    
+    @abstractmethod
+    def get_trajectories(self):
+        """
+        Returns a list of trajectory dictionaries.
+        Each trajectory should have at minimum:
+            - observations: dict or array
+            - actions: array
+            - rewards: array
+        """
+        pass
 
-    def _load(self):
-        dataset = minari.load_dataset(self.name, download=True)
-        for episode in tqdm(dataset, desc="Processing episodes"):
-            obs = torch.tensor(episode.observations["observation"][:-1], dtype=torch.float32).to(self.device)
-            actions = torch.tensor(episode.actions, dtype=torch.float32).to(self.device)
-            rewards = torch.tensor(episode.rewards, dtype=torch.float32).to(self.device)
-            dones = torch.tensor(episode.terminations, dtype=torch.bool).to(self.device)
+    @property
+    def is_task_organized(self):
+        """
+        Returns whether this dataset is already organized by task.
+        
+        Returns:
+            bool: True if the dataset returns a task_id->trajectories dict, 
+                False if it returns a list of mixed trajectories
+        """
+        return False
 
-            rtg = rewards.flip(dims=[0]).cumsum(dim=0).flip(dims=[0]).unsqueeze(-1)
-            prev_act = torch.cat([torch.zeros_like(actions[:1]), actions[:-1]], dim=0)
-            timesteps = torch.arange(len(obs), dtype=torch.long, device=self.device).unsqueeze(-1)
 
-            if obs.shape[0] < self.context_len:
-                continue
+class MinariTrajectoryDataset(TrajectoryDataset):
+    """Adapter for Minari datasets."""
+    
+    def __init__(self, dataset=None, dataset_name=None):
+        """
+        Initialize with either a dataset name to load or a pre-loaded dataset.
+        
+        Args:
+            dataset_name: Name of Minari dataset to load (e.g. "D4RL/kitchen/mixed-v2")
+            dataset: Pre-loaded Minari dataset
+        """
+        self.dataset_name = dataset_name
+        self._dataset = dataset
+        
+        if dataset is None and dataset_name is not None:
+            import minari
+            self._dataset = minari.load_dataset(dataset_name, download=True)
+        elif dataset is None and dataset_name is None:
+            raise ValueError("Either dataset_name or dataset must be provided")
 
-            for i in range(obs.shape[0] - self.context_len + 1):
-                self.sequence_data.append({
-                    "observations": obs[i:i+self.context_len],
-                    "actions": actions[i:i+self.context_len],
-                    "reward": rewards[i:i+self.context_len].unsqueeze(-1),
-                    "done": dones[i:i+self.context_len].unsqueeze(-1),
-                    "return_to_go": rtg[i:i+self.context_len],
-                    "prev_actions": prev_act[i:i+self.context_len],
-                    "timesteps": timesteps[i:i+self.context_len],
-                })
+        assert hasattr(self._dataset, "__iter__") or hasattr(self._dataset, "__getitem__"), "Dataset must be iterable"
+        assert hasattr(self._dataset[0], "observations"), "Dataset must have 'observations' attribute"
+        assert hasattr(self._dataset[0], "actions"), "Dataset must have 'actions' attribute"
+        assert hasattr(self._dataset[0], "rewards"), "Dataset must have 'rewards' attribute"
+    
+    def get_trajectories(self):
+        """Return the list of trajectories from the Minari dataset."""
+        return self._dataset
+    
+    @property
+    def is_task_organized(self):
+        return False
 
-        print(f"✅ Loaded {len(self.sequence_data)} sequences.")
 
-    def __len__(self):
-        return len(self.sequence_data)
 
-    def __getitem__(self, idx):
-        return self.sequence_data[idx]
+
+'''
+------Below class is for future use------
+'''
+class CustomTrajectoryDataset(TrajectoryDataset):
+    """Edit the below constructor to load a dataset other than minari."""
+    
+    def __init__(self, dataset):
+        """
+        Initialize with a list of trajectories.
+        
+        Args:
+            trajectories: List of trajectory dictionaries
+        """
+        self._dataset = dataset
+    
+    def get_trajectories(self):
+        """Return the list of trajectories."""
+        return self.trajectories
+    
+    @property
+    def is_task_organized(self):
+        '''
+        If task is organized, dataset should be organized such that 
+        there is a key correspondign to task id and 
+        there is a vlaue correspnding to the list of trajectories
+        '''
+        return True
+
