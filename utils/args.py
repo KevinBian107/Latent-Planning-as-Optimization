@@ -27,7 +27,7 @@ def parse_args(args: argparse.Namespace) -> argparse.Namespace:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default="configs/kitchen.yaml")
+    parser.add_argument("--config", type=str)
     parser.add_argument("--device", type=str)
     parser.add_argument("--seed", type=int)
     args = parser.parse_args()

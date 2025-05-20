@@ -5,10 +5,10 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import sys
 import minari
-
 all_losses = []
 r_losses = []
 a_losses = []
+
 # -------------------- 设置设备 --------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
@@ -17,14 +17,14 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
 device = torch.device("mps")
 
 # -------------------- 工作路径 --------------------
-os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(os.getcwd())
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 # -------------------- 超参数 --------------------
-MAX_LEN = 15
-HIDDEN_SIZE = 16
+MAX_LEN = 50
+HIDDEN_SIZE = 24
 N_LAYER = 3
 N_HEAD = 1
-BATCH_SIZE = 16
+BATCH_SIZE = 128
 NUM_EPOCHS = 2
 LEARNING_RATE = 1e-4
 
@@ -72,6 +72,7 @@ model = LatentPlannerModel(
     context_len=context_len,
     n_blocks=N_LAYER,
     n_heads=N_HEAD,
+    n_latent=6,
     device=device,
 ).to(device)
 
@@ -105,7 +106,7 @@ for epoch in range(NUM_EPOCHS):
         a_losses.append(loss_a.item())
 
         pbar.set_description(f"Epoch {epoch+1}, Loss: {loss_a.item():.4f}")
-
+torch.save(model,"results/weights/lpt_mujoco.pt")
 print("LPT training complete.")
 plt.figure(figsize=(8, 4))
 plt.plot(all_losses, label="Total loss")

@@ -14,16 +14,14 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
 
 # -------------------- 工作路径 --------------------
-os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(os.getcwd())
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 # -------------------- 超参数 --------------------
-MAX_LEN = 5
+MAX_LEN = 150
 HIDDEN_SIZE = 32
-N_LAYER = 3
+N_LAYER = 4
 N_HEAD = 1
-BATCH_SIZE = 64
-NUM_EPOCHS = 2
+BATCH_SIZE = 128
+NUM_EPOCHS = 3
 LEARNING_RATE = 1e-4
 
 context_len = MAX_LEN
@@ -58,6 +56,23 @@ for episode in tqdm(dataset):
             "prev_actions": prev_act[i:i+context_len],
             "timesteps": timesteps[i:i+context_len],
         })
+    # fig, axs = plt.subplots(2, 1, figsize=(10, 8), sharex=False)
+    # axs[0].plot(timesteps.cpu(), rtg.cpu(), label='Return-to-Go', color='blue')
+    # axs[0].set_title("RTG Decay Over Time in One Episode")
+    # axs[0].set_xlabel("Timestep")
+    # axs[0].set_ylabel("RTG Value")
+    # axs[0].grid(True)
+    # axs[0].legend()
+
+    # # 下图：RTG 值分布
+    # axs[1].hist(rtg.cpu(),density=True)
+    # axs[1].set_title("RTG Value Distribution")
+    # axs[1].set_xlabel("RTG Value")
+    # axs[1].set_ylabel("Frequency")
+    # axs[1].grid(True)
+
+    # plt.tight_layout()
+    # plt.show()
 
 print(f"Loaded {len(sequence_data)} sequences.")
 
@@ -101,7 +116,7 @@ for epoch in range(NUM_EPOCHS):
         optimizer.step()
 
         pbar.set_description(f"Epoch {epoch+1}, Loss: {loss.item():.4f}")
-
+torch.save(model,"results/weights/dt_kitchen.pt")
 print("Training complete.")
 plt.figure(figsize=(8, 4))
 plt.plot(all_losses, label="Action loss")

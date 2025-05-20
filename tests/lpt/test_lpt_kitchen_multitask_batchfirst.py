@@ -16,12 +16,9 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
 
-device = torch.device("cpu")
+device = torch.device("mps")
 
-os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(os.getcwd())
-
-MAX_LEN = 128
+MAX_LEN = 64
 HIDDEN_SIZE = 16
 N_LAYER = 3
 N_HEAD = 1
@@ -475,6 +472,8 @@ def main():
 
     # —————————————————————————————————————————————————————————————
     # Visualization
+    print(os.getcwd())
+    torch.save(model,"results/weights/lpt_kitchen.pt")
     print("\nLPT training complete. Generating visualizations...")
 
     # 1) Six‐panel overview

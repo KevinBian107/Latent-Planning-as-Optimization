@@ -6,6 +6,15 @@ from src.layers.block import Block
 from src.util_function import register_model
 @register_model("BasicDT")
 class DecisionTransformer(nn.Module):
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            nn.init.xavier_uniform_(module.weight)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            
     def __init__(self, state_dim, act_dim, n_blocks, h_dim, context_len,
                  n_heads, drop_p, max_timestep=4096):
         super().__init__()
@@ -39,6 +48,7 @@ class DecisionTransformer(nn.Module):
         self.predict_action = nn.Sequential(
             *([nn.Linear(h_dim, act_dim)] + ([nn.Tanh()] if use_action_tanh else []))
         )
+        self.apply(self._init_weights)
 
 
     def forward(self, timesteps, states, actions, returns_to_go):
