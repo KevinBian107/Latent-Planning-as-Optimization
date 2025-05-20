@@ -172,7 +172,7 @@ def segment_trajectory_by_subtasks(
     # Handle any remaining part of the trajectory
     if current_segment_start_idx < num_total_steps and len(tasks_segmented_this_episode) < len(task_goal_keys):
         # print(f"Adding trailing segment from timestep {current_segment_start_idx} to {num_total_steps -1}.")
-        trailing_segment = {}
+        trailing_segment = {} 
         trailing_segment_observations = {}
 
         # Copy the segment of the trajectory

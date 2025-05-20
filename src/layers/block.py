@@ -5,24 +5,22 @@ import torch.nn.functional as F
 from src.layers.attention import MaskedCausalAttention,CrossAttention
 
 class Block(nn.Module):
-    def __init__(self, h_dim, max_T, n_heads, drop_p):
+    def __init__(self, h_dim, max_T, n_heads, dropout):
         super().__init__()
-        self.attention = MaskedCausalAttention(h_dim, max_T, n_heads, drop_p)
-        self.mlp = nn.Sequential(
-                nn.Linear(h_dim, 4*h_dim),
-                nn.GELU(),
-                nn.Linear(4*h_dim, h_dim),
-                nn.Dropout(drop_p),
-            )
         self.ln1 = nn.LayerNorm(h_dim)
         self.ln2 = nn.LayerNorm(h_dim)
 
+        self.attn = MaskedCausalAttention(h_dim, max_T, n_heads, dropout)
+        self.mlp = nn.Sequential(
+            nn.Linear(h_dim, 4 * h_dim),
+            nn.GELU(),
+            nn.Linear(4 * h_dim, h_dim),
+            nn.Dropout(dropout)
+        )
+
     def forward(self, x):
-        # Attention -> LayerNorm -> MLP -> LayerNorm
-        x = x + self.attention(x) # residual
-        x = self.ln1(x)
-        x = x + self.mlp(x) # residual
-        x = self.ln2(x)
+        x = x + self.attn(self.ln1(x))  # Pre-LN attention
+        x = x + self.mlp(self.ln2(x))  # Pre-LN MLP
         return x
     
 

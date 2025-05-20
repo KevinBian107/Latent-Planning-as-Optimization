@@ -2,10 +2,56 @@ from abc import ABC, abstractmethod
 import os
 import torch
 from src.models import get_model
-from data import process_dataloader
 from logger import MultiLogger
 import wandb
 from tqdm import tqdm
+
+
+def process_dataloader(env_name: str, context_len, args):
+    import minari
+    from data.processors import SequenceProcessor, KitchenSegmenter
+    from data.data_processor import DataProcessor
+    from data.dataset import MinariTrajectoryDataset
+    from data.batch_generator import TaskBatchGenerator
+
+    downloaded_data = minari.load_dataset(env_name, download=True)
+    dataset = MinariTrajectoryDataset(dataset=downloaded_data)
+
+    sequence_processor = SequenceProcessor(
+        context_len = context_len,
+        device = args.training["device"]
+    )
+
+    kitchen_segmenter = KitchenSegmenter(
+        task_goal_keys=['microwave', 'kettle', 'light switch', 'slide cabinet'],
+        proximity_thresholds={
+            'microwave': 0.2,
+            'kettle': 0.3,
+            'light switch': 0.2,
+            'slide cabinet': 0.2
+        },
+        stability_duration=20
+    )
+
+    data_processor = DataProcessor()
+    processed_data = data_processor.process_dataset(
+        dataset=dataset,
+        pipeline_name='multi_task_segment',
+        processors={
+            'sequence_processor': sequence_processor,
+            'segmenter_processor': kitchen_segmenter
+        }
+    )
+
+    batch_generator = TaskBatchGenerator(
+        processed_data=processed_data,
+        device=args.training["device"],
+        batch_size=args.training["batch_size"]
+    )
+
+    # You can dynamically set the task here if needed
+    task_name = args.training.get("task_name", "microwave")
+    return batch_generator.get_batch(task_name)
 
 class BaseTrainer(ABC):
     def __init__(self, args):
@@ -25,8 +71,23 @@ class BaseTrainer(ABC):
         """
         pass
 
-    def _init_dataloder(self):
-        return process_dataloader(env_name=self.args.environment["name"], args = self.args)
+    def _init_dataloder(self,context_len):
+        env_mapping = {
+            "kitchen-mixed-v2": "D4RL/kitchen/mixed-v2",
+            "kitchen-complete-v2": "D4RL/kitchen/complete-v2",
+            "halfcheetah-expert-v0": "mujoco/halfcheetah/expert-v0"
+        }
+
+        env_key = self.args.environment["name"]
+        if env_key not in env_mapping:
+            raise Exception(f"{env_key} not found in environment mapping.")
+
+        env_name = env_mapping[env_key]
+        return process_dataloader(
+            env_name=env_name,
+            context_len= self.args.environment["context_len"],
+            args=self.args
+        )
     
     def _init_logger(self):
         return MultiLogger(args = self.args, logger_list = self.args.training["logger"])

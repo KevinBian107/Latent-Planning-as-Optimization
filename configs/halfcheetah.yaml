@@ -9,13 +9,13 @@ path:
 BasicLPT:
   state_dim: 59 
   act_dim: 9 
-  context_len: 128
+  context_len: 15
   h_dim: 16 
   n_blocks: 3 
   n_heads: 1 
   drop_p: 0.1 
   n_latent: 4
-  device: cuda
+  device: mps
   reward_weight: 1.0
   action_weight: 1.0
   z_n_iters: 10
@@ -25,12 +25,13 @@ BasicLPT:
 
 BasicDT:
   h_dim: 16
-  context_len: 128
-  state_dim: 16
+  context_len: 15
+  state_dim: 59
   act_dim: 9
   n_heads: 1
   n_blocks: 3
   drop_p: 0.1
+  device: mps
 
 
 training:
@@ -47,12 +48,12 @@ training:
 
 
 environment:
-  name: kitchen-mixed-v2 #the name would be used for import, youc ahnge change tt
+  name: halfcheetah-expert-v0 #the name would be used for import, youc ahnge change tt
   env_type: D4RL
   env_provider: minari #the env_type define the provider
   max_episode_steps: 5000
   seed: 42
-  context_len: 150
+  context_len: 15
 
 
 others:
