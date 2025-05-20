@@ -230,6 +230,22 @@ def split_task(dataset):
         'truncations': ... 
         }
     """
+    example_traj = dataset[0]
+
+    def determine_padding(traj):
+        ag_padding = {}
+        dg_padding = {}
+        
+        for key in TASK_KEYS:
+            ag_dim = traj.observations['achieved_goal'][key].shape[1] if len(traj.observations['achieved_goal'][key].shape) > 1 else 1
+            dg_dim = traj.observations['desired_goal'][key].shape[1] if len(traj.observations['desired_goal'][key].shape) > 1 else 1
+            
+            ag_padding[key] = ag_dim
+            dg_padding[key] = dg_dim
+        
+        return ag_padding, dg_padding
+
+    ag_padding, dg_padding = determine_padding(example_traj)
 
     segmented_dataset = defaultdict(list)
     task_counts = defaultdict(int)
@@ -246,7 +262,12 @@ def split_task(dataset):
             task_id = segment['task_id']
             
             # cut segment to equal lenght of sliding window 
-            sequences = process_episode(segment)
+            sequences = process_episode(
+                segment, 
+                ag_padding=ag_padding, 
+                dg_padding=dg_padding, 
+                task_keys = TASK_KEYS,  # TASK_KEYS determine the order of the keys
+            )
             segmented_dataset[task_id].extend(sequences)
 
             task_counts[task_id] += len(sequences)
@@ -259,9 +280,53 @@ def split_task(dataset):
     return segmented_dataset
 
 
-def process_episode(episode, max_len=MAX_LEN):
+def process_episode(
+        episode, 
+        ag_padding, 
+        dg_padding, 
+        task_keys, 
+        max_len=MAX_LEN 
+    ):
     """Process a single episode into training sequences"""
-    obs = torch.tensor(episode['observations']["observation"][:-1], dtype=torch.float32)
+    observations = episode['observations']['observation'][:-1] 
+    desired_goal = episode['observations']['desired_goal'] 
+    achieved_goal = episode['observations']['achieved_goal'] 
+
+    padding_len = sum(pad_len for pad_len in ag_padding.values())
+
+    # Initialize arrays for desired and achieved goals
+    num_timesteps = len(observations)
+    desired_goals_pad = np.zeros((num_timesteps, padding_len))
+    achieved_goals_pad = np.zeros((num_timesteps, padding_len))
+
+    # Calculate dimensions and fill values for each task
+    ag_offset = 0 
+    dg_offset = 0 
+    key = list(desired_goal.keys())[0]
+
+    for task_id in task_keys: 
+        ag_task_dim = ag_padding[task_id]
+        dg_task_dim = dg_padding[task_id]
+        
+        if task_id == key: 
+            # Fill with actual values
+            desired_goal_value = desired_goal[key][:-1]  
+            achieved_goals_value = achieved_goal[key][:-1]
+
+            if isinstance(achieved_goals_value, np.ndarray) and achieved_goals_value.ndim > 1:
+                desired_goals_pad[:, dg_offset:dg_offset+dg_task_dim] = desired_goal_value
+                achieved_goals_pad[:, ag_offset:ag_offset+ag_task_dim] = achieved_goals_value
+            else:
+                desired_goals_pad[:, dg_offset:dg_offset+dg_task_dim] = desired_goal_value.reshape(-1, 1)
+                achieved_goals_pad[:, ag_offset:ag_offset+ag_task_dim] = achieved_goals_value.reshape(-1, 1)
+        
+        ag_offset += ag_task_dim
+        dg_offset += dg_task_dim
+
+    # Combine observations with goal representations
+    full_state_space = np.concatenate([observations, desired_goals_pad, achieved_goals_pad], axis=1)
+
+    obs = torch.tensor(full_state_space, dtype=torch.float32)
     acts = torch.tensor(episode['actions'], dtype=torch.float32)
     rews = torch.tensor(episode['rewards'], dtype=torch.float32)
     rtg = rews.flip([0]).cumsum(0).flip([0]).unsqueeze(-1)
@@ -355,7 +420,7 @@ def main():
     dataset = minari.load_dataset("D4RL/kitchen/complete-v2", download=True)
     task_datasets = split_task(dataset)
 
-    state_dim = dataset[0].observations["observation"].shape[1]
+    state_dim = 81 # hardcoded value - 59 + 11 + 11 #dataset[0].observations["observation"].shape[1]
     act_dim   = dataset[0].actions.shape[1]
 
     model = LatentPlannerModel(
