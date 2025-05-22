@@ -14,21 +14,21 @@ device = (
 )
 
 # Load model
-model = torch.load("results/weights/dt_mujoco.pt",weights_only=False)
+model = torch.load("results/weights/dt_kitchen.pt",weights_only=False)
 model.to(device)
 model.device = device
 model.eval()
 
 # Load env
-dataset = minari.load_dataset('mujoco/halfcheetah/expert-v0')
+dataset = minari.load_dataset('D4RL/kitchen/mixed-v2')
 env = dataset.recover_environment(render_mode="human")
 obs = env.reset()[0]
 
 # --- 推理缓存设置 ---
-max_len = 50  # 最多考虑多少步的历史
-state_dim = obs.shape[0]
+max_len = 15  # 最多考虑多少步的历史
+state_dim = obs["observation"].shape[0]
 action_dim = env.action_space.shape[0]
-return_to_go = 12000.0  # 可以是一个经验值
+return_to_go = 2.0  # 可以是一个经验值
 
 states = deque([], maxlen=max_len)
 actions = deque([], maxlen=max_len)
@@ -51,7 +51,7 @@ def pad_timestep(seq, size):
 
 for _ in range(10000):
     # 更新缓存
-    states.append(torch.tensor(obs, dtype=torch.float32))
+    states.append(torch.tensor(obs["observation"], dtype=torch.float32))
     actions.append(torch.zeros(action_dim))  # dummy action for initial inference
     rewards.append(0.0)  # dummy reward
     timesteps.append(t)

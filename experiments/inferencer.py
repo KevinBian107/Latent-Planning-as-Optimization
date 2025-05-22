@@ -2,19 +2,20 @@ import torch
 import numpy as np
 from collections import deque
 from abc import ABC, abstractmethod
+from utils.process_obs import process_observation, kitchen_goal_obs_dict
 import minari
 
 # --------------------- 环境注册 ---------------------
 ENV_REGISTRY = {
     "kitchen-mixed-v2": {
         "env_name": "D4RL/kitchen/mixed-v2",
-        "step_mapping": lambda out: (out[0]["observation"], out[1], out[2], out[3], out[4]),
-        "reset_mapping": lambda out: out[0]["observation"],
+        "step_mapping": lambda out: (process_observation(kitchen_goal_obs_dict, out[0]["observation"]), out[1], out[2], out[3], out[4]),
+        "reset_mapping": lambda out: process_observation(kitchen_goal_obs_dict, out[0]["observation"]),
     },
     "kitchen-complete-v2": {
         "env_name": "D4RL/kitchen/complete-v2",
-        "step_mapping": lambda out: (out[0]["observation"], out[1], out[2], out[3], out[4]),
-        "reset_mapping": lambda out: out[0]["observation"],
+        "step_mapping": lambda out: (process_observation(kitchen_goal_obs_dict, out[0]["observation"]), out[1], out[2], out[3], out[4]),
+        "reset_mapping": lambda out: process_observation(kitchen_goal_obs_dict, out[0]["observation"]),
     },
     "halfcheetah-expert-v0": {
         "env_name": "mujoco/halfcheetah/expert-v0",
