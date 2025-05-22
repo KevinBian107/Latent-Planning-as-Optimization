@@ -28,13 +28,29 @@ context_len = MAX_LEN
 
 # -------------------- 加载数据 --------------------
 dataset = minari.load_dataset('D4RL/kitchen/mixed-v2', download=True)
-env = dataset.recover_environment()
+# env = dataset.recover_environment()
 
 # 改为 List 缓存训练段
 sequence_data = []
 
 for episode in tqdm(dataset):
-    observations = torch.tensor(episode.observations["observation"][:-1], dtype=torch.float32).to(device)
+    obs = episode.observations['observation'][:-1]
+    desired_goal = episode.observations['desired_goal']
+    achieved_goal = episode.observations['achieved_goal']
+    
+    task_keys = ['microwave', 'kettle', 'light switch', 'bottom burner']
+
+    desired_goals_list = [desired_goal[key][:-1] for key in task_keys]
+    achieved_goals_list = [achieved_goal[key][:-1] for key in task_keys]
+
+    all_desired_goals = np.concatenate(desired_goals_list, axis=1)  # shape: (seq_len, sum(goal_dims))
+    all_achieved_goals = np.concatenate(achieved_goals_list, axis=1)  # shape: (seq_len, sum(goal_dims))
+    
+    full_state_space = np.concatenate([obs, all_desired_goals, all_achieved_goals], axis=1)
+    
+    # full state space shape = [timestep, 12 + 12 + 59]
+
+    observations = torch.tensor(full_state_space, dtype=torch.float32).to(device)
     actions = torch.tensor(episode.actions, dtype=torch.float32).to(device)
     rew = torch.tensor(episode.rewards, dtype=torch.float32).to(device)
     done = torch.tensor(episode.terminations, dtype=torch.bool).to(device)
