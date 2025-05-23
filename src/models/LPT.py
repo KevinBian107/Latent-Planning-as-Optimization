@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from src.models.conditional_decision_transformer import ConditionalDecisionTransformer
 from src.models.unet1d import Unet1D
+from src.models.vae1d import VAE1D
 from typing import Optional, Tuple
 from src.util_function import register_model
 
@@ -40,7 +41,9 @@ class LatentPlannerModel(nn.Module):
 
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.planner = Unet1D(dim=self.z_dim, channels=1, dim_mults=(1, 2, 4)).to(self.device)
+        # self.planner = Unet1D(dim=self.z_dim, channels=1, dim_mults=(1, 2, 4)).to(self.device)
+        self.planner = VAE1D(dim=self.z_dim).to(self.device)
+        
         self.trajectory_generator = ConditionalDecisionTransformer(
             state_dim, act_dim, n_blocks, h_dim, context_len, n_heads, drop_p
         ).to(self.device)
