@@ -5,6 +5,7 @@ import minari
 
 from tqdm import tqdm
 import wandb
+import pdb
 
 from agent.src.models import get_model
 from checkpointing import MultiLogger
@@ -46,6 +47,16 @@ def process_dataloader(env_name: str, context_len, args):
                 'segmenter_processor': kitchen_segmenter
             }
         )
+        
+        batch_generator = TaskBatchGenerator(
+        processed_data=processed_data,
+        device=args.training["device"],
+        batch_size=args.training["batch_size"]
+        )
+
+        # You can dynamically set the task here if needed
+        task_name = args.training.get("task_name", "microwave")
+        task_name = args.training.get("task_name", env_name)
     
     if "halfcheetah" in env_name:
         data_processor = DataProcessor()
@@ -54,16 +65,9 @@ def process_dataloader(env_name: str, context_len, args):
             pipeline_name='single_task',
             processors={'sequence_processor': sequence_processor}
         )
+        
+        
 
-    batch_generator = TaskBatchGenerator(
-        processed_data=processed_data,
-        device=args.training["device"],
-        batch_size=args.training["batch_size"]
-    )
-
-    # You can dynamically set the task here if needed
-    task_name = args.training.get("task_name", "microwave")
-    task_name = args.training.get("task_name", env_name)
     
     return batch_generator.get_batch(task_name)
 
@@ -130,7 +134,8 @@ class DtTrainer(BaseTrainer):
         self.model.to(self.device)
         total_step = 0
         for epoch in range(self.args.training["epochs"]):
-            for i,batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
+            # for i, batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
+            for i, batch in enumerate(tqdm(self.dataloader)):
                 state_preds, action_preds, return_preds = self.model(
                 timesteps=batch["timesteps"].squeeze(-1).to(self.device),
                 states=batch["observations"].to(self.device),
@@ -177,7 +182,8 @@ class LptTrainer(BaseTrainer):
         self.model.to(self.device)
         total_step = 0
         for epoch in range(self.args.training["epochs"]):
-            for i,batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
+            # for i,batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
+            for i, batch in enumerate(tqdm(self.dataloader)):
                 batch_inds = torch.arange(batch["observations"].shape[0], device=self.device)
                 pred_action, pred_state, pred_reward = self.model(
                     states=batch["observations"].to(self.device),

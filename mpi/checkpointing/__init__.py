@@ -3,7 +3,7 @@ import logging
 import wandb
 import os
 import torch
-# from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from utils.show_icon import launch_tensorboard
 import shutil
 from tqdm import tqdm
@@ -134,7 +134,7 @@ class MultiLogger(BaseLogger):
         super().__init__(args)
         LOGGER_MAP = {"file":FileLogger,
                       "wandb":WandbLogger,
-                    #   "tensorboard":TensorBoardLogger,
+                      "tensorboard":TensorBoardLogger,
                       "console":ConsoleLogger}
         
         self.loggers = [LOGGER_MAP[logger_name](args) for logger_name in logger_list]
