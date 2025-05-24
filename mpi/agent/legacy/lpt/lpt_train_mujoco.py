@@ -6,17 +6,18 @@ import matplotlib.pyplot as plt
 import sys
 import minari
 
-from src.models.LPT import LatentPlannerModel
-
-all_losses = []
-r_losses = []
-a_losses = []
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+from src.models.LPT import LatentPlannerModel
+
+all_losses = []
+r_losses = []
+a_losses = []
 
 MAX_LEN = 50
 HIDDEN_SIZE = 24

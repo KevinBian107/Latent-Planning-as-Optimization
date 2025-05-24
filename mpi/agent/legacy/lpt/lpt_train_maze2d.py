@@ -6,22 +6,23 @@ import matplotlib.pyplot as plt
 import sys
 import minari
 
-from src.models.LPT import LatentPlannerModel
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
+from agent.src.models.lpt import LatentPlannerModel
 device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-MAX_LEN       = 150
-HIDDEN_SIZE   = 128
-N_LAYER       = 3
-N_HEAD        = 1
-BATCH_SIZE    = 128
-NUM_EPOCHS    = 1
+MAX_LEN = 150
+HIDDEN_SIZE = 16
+N_LAYER = 3
+N_HEAD = 1
+N_LATENT = 4
+BATCH_SIZE = 128
+NUM_EPOCHS = 2
 LEARNING_RATE = 1e-4
 
 context_len = MAX_LEN
-
-dataset = minari.load_dataset('D4RL/pointmaze/medium-dense-v2', download=True)
+# dataset = minari.load_dataset('D4RL/pointmaze/medium-dense-v2', download=True)
+dataset = minari.load_dataset('D4RL/pointmaze/umaze-v2', download=True)
 
 sequence_data = []
 for episode in tqdm(dataset, desc="Loading U-Maze episodes"):
@@ -31,7 +32,6 @@ for episode in tqdm(dataset, desc="Loading U-Maze episodes"):
     desired_goal   = obs_dict['desired_goal'][:-1] 
     achieved_goal  = obs_dict['achieved_goal'][:-1]
 
-    # concatenate into full state
     full_state_space = np.concatenate([obs, desired_goal, achieved_goal], axis=1)
     T0 = full_state_space.shape[0]
 
@@ -73,6 +73,7 @@ model = LatentPlannerModel(
     context_len=context_len,
     n_blocks=N_LAYER,
     n_heads=N_HEAD,
+    n_latent=N_LATENT,
     device=device,
 ).to(device)
 
