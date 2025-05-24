@@ -7,16 +7,14 @@ import sys
 import minari
 from collections import defaultdict
 
-from src.models.LPT import LatentPlannerModel
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
+from src.models.LPT import LatentPlannerModel
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(os.getcwd())
 
 MAX_LEN = 15
 HIDDEN_SIZE = 32

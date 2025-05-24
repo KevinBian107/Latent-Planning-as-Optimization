@@ -42,8 +42,8 @@ class LatentPlannerModel(nn.Module):
 
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        # self.planner = Unet1D(dim=self.z_dim, channels=1, dim_mults=(1, 2, 4)).to(self.device)
-        self.planner = VAE1D(dim=self.z_dim).to(self.device)
+        self.planner = Unet1D(dim=self.z_dim, channels=1, dim_mults=(1, 2, 4)).to(self.device)
+        # self.planner = VAE1D(dim=self.z_dim).to(self.device)
         
         self.trajectory_generator = ConditionalDecisionTransformer(
             state_dim, act_dim, n_blocks, h_dim, context_len, n_heads, drop_p

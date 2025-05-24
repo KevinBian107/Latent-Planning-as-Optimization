@@ -11,6 +11,12 @@ Run our code from the entry point with:
 python mpi/train.py --task training --train_type mixed
 ```
 
+Or running the legacy code:
+
+```bash
+python mpi/agent/legacy/lpt/lpt_train_maze2d.py
+```
+
 ## Acknowledgements
 - The decision transformer model implementation advices code from the [official repository of DT](https://github.com/kzl/decision-transformer) .
 - The latent plan transformer model implementation advices code from the [official repository of LPT](https://github.com/mingluzhao/Latent-Plan-Transformer) .
