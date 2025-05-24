@@ -56,7 +56,10 @@ mpi/
 
 ## ***KEY NOTE***:
 
-For every unique `environment` (i.e. kitchen, maze2d, mujoco), we will different unqiue ways of handling data input, which will beusing different `train` functions (i.e. train_mixed(), train_batched(), train_split()) within the unique `model` inheritence class (i.e. DtTrainer). Similarly, during inference time, an wrapper wouldbe casted upon each environment for working with unqiue model choices. The data_loader should automatically handle environment differecnes during training.
+For every unique `environment` (i.e. kitchen, maze2d, mujoco), we will different unqiue ways of handling data input, which will beusing different `train` functions (i.e. train_mixed(), train_batched(), train_split()) within the unique `model` inheritence class (i.e. DtTrainer).
+- A specific model's `Trainer` should be generic enough such that when taking `yaml` + `env_name` + `train_type`, it should train.
+
+Similarly, during inference time, an wrapper wouldbe casted upon each environment for working with unqiue model choices. The data_loader should automatically handle environment differecnes during training.
 
 - Currently we still have many `legacy files` that contain single run files, which will be deleted later.
 
