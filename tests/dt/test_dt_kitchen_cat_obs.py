@@ -5,6 +5,7 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import sys
 import minari
+
 all_losses = []
 r_losses = []
 a_losses = []
@@ -15,11 +16,12 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
 
 # -------------------- 工作路径 --------------------
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from utils.process_obs import process_observation, kitchen_goal_obs_dict
 # -------------------- 超参数 --------------------
-MAX_LEN = 150
-HIDDEN_SIZE = 32
+MAX_LEN = 50
+HIDDEN_SIZE = 256
 N_LAYER = 4
-N_HEAD = 1
+N_HEAD = 8
 BATCH_SIZE = 128
 NUM_EPOCHS = 3
 LEARNING_RATE = 1e-4
@@ -34,44 +36,76 @@ dataset = minari.load_dataset('D4RL/kitchen/mixed-v2', download=True)
 sequence_data = []
 
 for episode in tqdm(dataset):
-    obs = episode.observations['observation'][:-1]
-    desired_goal = episode.observations['desired_goal']
-    achieved_goal = episode.observations['achieved_goal']
-    
-    task_keys = ['microwave', 'kettle', 'light switch', 'bottom burner']
-
-    desired_goals_list = [desired_goal[key][:-1] for key in task_keys]
-    achieved_goals_list = [achieved_goal[key][:-1] for key in task_keys]
-
-    all_desired_goals = np.concatenate(desired_goals_list, axis=1)  # shape: (seq_len, sum(goal_dims))
-    all_achieved_goals = np.concatenate(achieved_goals_list, axis=1)  # shape: (seq_len, sum(goal_dims))
-    
-    full_state_space = np.concatenate([obs, all_desired_goals, all_achieved_goals], axis=1)
-    
-    # full state space shape = [timestep, 12 + 12 + 59]
-
+    obs = episode.observations
+    observation, desired_goal, achieved_goal = process_observation(kitchen_goal_obs_dict, obs).values()
+    full_state_space = torch.cat([observation, desired_goal, achieved_goal], dim=-1)
     observations = torch.tensor(full_state_space, dtype=torch.float32).to(device)
     actions = torch.tensor(episode.actions, dtype=torch.float32).to(device)
     rew = torch.tensor(episode.rewards, dtype=torch.float32).to(device)
     done = torch.tensor(episode.terminations, dtype=torch.bool).to(device)
-
+    if len(observations) < 40:
+        continue;
     rtg = rew.flip(dims=[0]).cumsum(dim=0).flip(dims=[0]).unsqueeze(-1)
     prev_act = torch.cat([torch.zeros_like(actions[:1]), actions[:-1]], dim=0)
     timesteps = torch.arange(len(observations), dtype=torch.long, device=device).unsqueeze(-1)
 
-    if observations.shape[0] < context_len:
-        continue
+    T = observations.shape[0]
+    
+    if T < context_len:
+        # 左侧 zero padding 到 context_len
+        pad_len = context_len - T
+        pad = lambda x, dim: torch.cat([torch.zeros(pad_len, *x.shape[1:], device=x.device), x], dim=dim)
 
-    for i in range(observations.shape[0] - context_len + 1):
-        sequence_data.append({
-            "observations": observations[i:i+context_len],
-            "actions": actions[i:i+context_len],
-            "reward": rew[i:i+context_len].unsqueeze(-1),
-            "done": done[i:i+context_len].unsqueeze(-1),
-            "return_to_go": rtg[i:i+context_len],
-            "prev_actions": prev_act[i:i+context_len],
-            "timesteps": timesteps[i:i+context_len],
-        })
+        seg = {
+            "observations": pad(observations, 0),
+            "actions": pad(actions, 0),
+            "reward": pad(rew.unsqueeze(-1), 0),
+            "done": pad(done.unsqueeze(-1).float(), 0),  # later convert back to bool if needed
+            "return_to_go": pad(rtg, 0),
+            "prev_actions": pad(prev_act, 0),
+            "timesteps": pad(timesteps, 0),
+        }
+        sequence_data.append(seg)
+        for k, v in seg.items():
+            if v.shape[0] != context_len:
+                print(f"[DEBUG] T = {T}")
+                for _k, _v in seg.items():
+                    print(f" - {repr(_k)} shape = {_v.shape}")
+                raise ValueError(f"[INVALID SEGMENT] {k} has shape {v.shape}, expected {context_len}")
+    else:
+        # 正常滑窗处理
+        T = min(
+                observation.shape[0],
+                actions.shape[0],
+                rew.shape[0],
+                done.shape[0],
+                desired_goal.shape[0],
+                achieved_goal.shape[0]
+            )
+        observation = observation[:T]
+        desired_goal = desired_goal[:T]
+        achieved_goal = achieved_goal[:T]
+        actions = actions[:T]
+        rew = rew[:T]
+        done = done[:T]
+        for i in range(T - context_len + 1):
+            seg = {
+                "observations": observations[i:i+context_len],
+                "actions": actions[i:i+context_len],
+                "reward": rew[i:i+context_len].unsqueeze(-1),
+                "done": done[i:i+context_len].unsqueeze(-1).float(),
+                "return_to_go": rtg[i:i+context_len],
+                "prev_actions": prev_act[i:i+context_len],
+                "timesteps": timesteps[i:i+context_len],
+            }
+            sequence_data.append(seg)
+            for k, v in seg.items():
+                if v.shape[0] != context_len:
+                    print(f"[DEBUG] T = {T}")
+                    for _k, _v in seg.items():
+                        print(f" - {repr(_k)} shape = {_v.shape}")
+                    raise ValueError(f"[INVALID SEGMENT] {k} has shape {v.shape}, expected {context_len}")
+
     # fig, axs = plt.subplots(2, 1, figsize=(10, 8), sharex=False)
     # axs[0].plot(timesteps.cpu(), rtg.cpu(), label='Return-to-Go', color='blue')
     # axs[0].set_title("RTG Decay Over Time in One Episode")

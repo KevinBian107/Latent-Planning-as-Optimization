@@ -21,7 +21,6 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
 
-device = torch.device("cpu")
 
 # ───────────────────────────── Device ────────────────────────────────────────
 device = (
@@ -149,6 +148,12 @@ def split_task(dataset):
 # ───────────────────────────── Windowing ─────────────────────────────────────
 def process_episode(ep, max_len=MAX_LEN):
     obs  = torch.tensor(ep["observations"]["observation"][:-1], dtype=torch.float32)
+    #desired_goal = torch.tensor(list(ep["observations"]["desired_goal"].values())[0][:-1], dtype=torch.float32)
+    #achieved_goal = torch.tensor(list(ep["observations"]["achieved_goal"].values())[0][:-1], dtype=torch.float32)
+    #obs = torch.cat([pre_obs,desired_goal,achieved_goal],dim = -1)
+
+
+
     acts = torch.tensor(ep["actions"], dtype=torch.float32)
     rews = torch.tensor(ep["rewards"], dtype=torch.float32)
     rtg  = rews.flip(0).cumsum(0).flip(0).unsqueeze(-1)
@@ -215,7 +220,7 @@ def main():
     raw_ds = minari.load_dataset("D4RL/kitchen/complete-v2", download=True)
     task_ds = split_task(raw_ds)                               # segmentation
 
-    state_dim = raw_ds[0].observations["observation"].shape[1]
+    state_dim = raw_ds[0].observations["observation"].shape[1] 
     act_dim   = raw_ds[0].actions.shape[1]
 
     model = LatentPlannerModel(
@@ -235,7 +240,7 @@ def main():
     task_losses = {tid: [] for tid in task_ds}
 
     # =============== MAML training loop ===============
-    for it in range(NUM_META_ITERS):
+    for it in tqdm(range(NUM_META_ITERS)):
         outer_opt.zero_grad()
         outer_total, outer_a, outer_r = 0.0, 0.0, 0.0
 
@@ -316,8 +321,8 @@ def main():
 
     # save model
     os.makedirs("results/weights", exist_ok=True)
-    torch.save(model.state_dict(), "results/weights/lpt_maml.pt")
-    print("training done – saved weights to results/weights/lpt_maml.pt")
+    torch.save(model.state_dict(), "results/weights/maml_kitchen.pt")
+    print("training done – saved weights to results/weights/maml_kicthen.pt")
 
     # =============== Visualization ===============
     if not meta_total: return

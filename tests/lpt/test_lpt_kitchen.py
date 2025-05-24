@@ -5,10 +5,10 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import sys
 import minari
+
 all_losses = []
 r_losses = []
 a_losses = []
-
 # -------------------- 设置设备 --------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
@@ -17,11 +17,13 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
 device = torch.device("mps")
 
 # -------------------- 工作路径 --------------------
-import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+# Add the project root directory to the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+from src.models.LPT import LatentPlannerModel
+
 # -------------------- 超参数 --------------------
-MAX_LEN = 50
-HIDDEN_SIZE = 24
+MAX_LEN = 15
+HIDDEN_SIZE = 16
 N_LAYER = 3
 N_HEAD = 1
 BATCH_SIZE = 128
@@ -31,14 +33,29 @@ LEARNING_RATE = 1e-4
 context_len = MAX_LEN
 
 # -------------------- 加载数据 --------------------
-dataset = minari.load_dataset('mujoco/halfcheetah/expert-v0', download=True)
-env = dataset.recover_environment()
+dataset = minari.load_dataset('D4RL/kitchen/mixed-v2', download=True)
+# env = dataset.recover_environment()
 
 # 改为 List 缓存训练段
 sequence_data = []
 
 for episode in tqdm(dataset):
-    observations = torch.tensor(episode.observations[:-1], dtype=torch.float32).to(device)
+    # desired_goal = episode.desired_goal
+    obs = episode.observations['observation'][:-1]
+    desired_goal = episode.observations['desired_goal']
+    achieved_goal = episode.observations['achieved_goal']
+
+    task_keys = ['microwave', 'kettle', 'light switch', 'bottom burner']
+
+    desired_goals_list = [desired_goal[key][:-1] for key in task_keys]
+    achieved_goals_list = [achieved_goal[key][:-1] for key in task_keys]
+
+    all_desired_goals = np.concatenate(desired_goals_list, axis=1)  # shape: (seq_len, sum(goal_dims))
+    all_achieved_goals = np.concatenate(achieved_goals_list, axis=1)  # shape: (seq_len, sum(goal_dims))
+    
+    full_state_space = np.concatenate([obs, all_desired_goals, all_achieved_goals], axis=1)
+    
+    observations = torch.tensor(full_state_space, dtype=torch.float32).to(device)
     actions = torch.tensor(episode.actions, dtype=torch.float32).to(device)
     rew = torch.tensor(episode.rewards, dtype=torch.float32).to(device)
     done = torch.tensor(episode.terminations, dtype=torch.bool).to(device)
@@ -72,7 +89,6 @@ model = LatentPlannerModel(
     context_len=context_len,
     n_blocks=N_LAYER,
     n_heads=N_HEAD,
-    n_latent=6,
     device=device,
 ).to(device)
 
@@ -106,7 +122,7 @@ for epoch in range(NUM_EPOCHS):
         a_losses.append(loss_a.item())
 
         pbar.set_description(f"Epoch {epoch+1}, Loss: {loss_a.item():.4f}")
-torch.save(model,"results/weights/lpt_mujoco.pt")
+
 print("LPT training complete.")
 plt.figure(figsize=(8, 4))
 plt.plot(all_losses, label="Total loss")
