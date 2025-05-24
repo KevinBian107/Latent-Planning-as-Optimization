@@ -1,18 +1,21 @@
 from abc import ABC, abstractmethod
 import os
 import torch
-from src.models import get_model
-from logger import MultiLogger
-import wandb
+import minari
+
 from tqdm import tqdm
+import wandb
+
+from agent.src.models import get_model
+from checkpointing import MultiLogger
+
+from data.processors import SequenceProcessor, KitchenSegmenter
+from data.data_processor import DataProcessor
+from data.dataset import MinariTrajectoryDataset
+from data.batch_generator import TaskBatchGenerator
 
 
 def process_dataloader(env_name: str, context_len, args):
-    import minari
-    from data.processors import SequenceProcessor, KitchenSegmenter
-    from data.data_processor import DataProcessor
-    from data.dataset import MinariTrajectoryDataset
-    from data.batch_generator import TaskBatchGenerator
 
     downloaded_data = minari.load_dataset(env_name, download=True)
     dataset = MinariTrajectoryDataset(dataset=downloaded_data)
@@ -21,27 +24,36 @@ def process_dataloader(env_name: str, context_len, args):
         context_len = context_len,
         device = args.training["device"]
     )
+    
+    if "kitchen" in env_name:
+        kitchen_segmenter = KitchenSegmenter(
+            task_goal_keys=['microwave', 'kettle', 'light switch', 'slide cabinet'],
+            proximity_thresholds={
+                'microwave': 0.2,
+                'kettle': 0.3,
+                'light switch': 0.2,
+                'slide cabinet': 0.2
+            },
+            stability_duration=20
+        )
 
-    kitchen_segmenter = KitchenSegmenter(
-        task_goal_keys=['microwave', 'kettle', 'light switch', 'slide cabinet'],
-        proximity_thresholds={
-            'microwave': 0.2,
-            'kettle': 0.3,
-            'light switch': 0.2,
-            'slide cabinet': 0.2
-        },
-        stability_duration=20
-    )
-
-    data_processor = DataProcessor()
-    processed_data = data_processor.process_dataset(
-        dataset=dataset,
-        pipeline_name='multi_task_segment',
-        processors={
-            'sequence_processor': sequence_processor,
-            'segmenter_processor': kitchen_segmenter
-        }
-    )
+        data_processor = DataProcessor()
+        processed_data = data_processor.process_dataset(
+            dataset=dataset,
+            pipeline_name='multi_task_segment',
+            processors={
+                'sequence_processor': sequence_processor,
+                'segmenter_processor': kitchen_segmenter
+            }
+        )
+    
+    if "halfcheetah" in env_name:
+        data_processor = DataProcessor()
+        processed_data = data_processor.process_dataset(
+            dataset=dataset,
+            pipeline_name='single_task',
+            processors={'sequence_processor': sequence_processor}
+        )
 
     batch_generator = TaskBatchGenerator(
         processed_data=processed_data,
@@ -51,7 +63,10 @@ def process_dataloader(env_name: str, context_len, args):
 
     # You can dynamically set the task here if needed
     task_name = args.training.get("task_name", "microwave")
+    task_name = args.training.get("task_name", env_name)
+    
     return batch_generator.get_batch(task_name)
+
 
 class BaseTrainer(ABC):
     def __init__(self, args):
@@ -61,7 +76,7 @@ class BaseTrainer(ABC):
 
 
     @abstractmethod
-    def train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
+    def mixed_train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
         pass
 
     @abstractmethod
@@ -71,7 +86,7 @@ class BaseTrainer(ABC):
         """
         pass
 
-    def _init_dataloder(self,context_len):
+    def _init_dataloder(self):
         env_mapping = {
             "kitchen-mixed-v2": "D4RL/kitchen/mixed-v2",
             "kitchen-complete-v2": "D4RL/kitchen/complete-v2",
@@ -111,7 +126,7 @@ class DtTrainer(BaseTrainer):
         return get_model("BasicDT",**self.args.BasicDT)
         
 
-    def train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
+    def mixed_train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
         self.model.to(self.device)
         total_step = 0
         for epoch in range(self.args.training["epochs"]):
@@ -158,7 +173,7 @@ class LptTrainer(BaseTrainer):
         return get_model("BasicLPT",**self.args.BasicLPT)
 
 
-    def train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
+    def mixed_train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
         self.model.to(self.device)
         total_step = 0
         for epoch in range(self.args.training["epochs"]):

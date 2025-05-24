@@ -2,8 +2,10 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.layers.block import Block
-from src.util_function import register_model
+
+from agent.src.layers.block import Block
+from agent.src.util_function import register_model
+
 @register_model("BasicDT")
 class DecisionTransformer(nn.Module):
 

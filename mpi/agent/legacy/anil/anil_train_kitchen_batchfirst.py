@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore", category=RuntimeWarning)
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from src.models.MPILL_ANIL import MPILL_ANIL
+from mpi.agent.src.models.anil import MPILL_ANIL
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():

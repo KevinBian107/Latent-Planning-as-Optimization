@@ -2,7 +2,8 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.layers.attention import MaskedCausalAttention,CrossAttention
+
+from agent.src.layers.attention import MaskedCausalAttention,CrossAttention
 
 class Block(nn.Module):
     def __init__(self, h_dim, max_T, n_heads, dropout):

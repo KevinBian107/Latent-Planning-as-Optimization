@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.models.conditional_decision_transformer import ConditionalDecisionTransformer
-from src.models.unet1d import Unet1D
-from src.models.vae1d import VAE1D
+from agent.src.models.conditional_decision_transformer import ConditionalDecisionTransformer
+from agent.src.models.unet1d import Unet1D
+from agent.src.models.vae1d import VAE1D
+from agent.src.util_function import register_model
+
 from typing import Optional, Tuple
-from src.util_function import register_model
 
 class Swish(nn.Module):
     def forward(self, x):
