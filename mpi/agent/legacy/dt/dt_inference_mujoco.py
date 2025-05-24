@@ -6,26 +6,22 @@ import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-# --- 环境和模型设置 ---
 device = (
     torch.device("cuda") if torch.cuda.is_available()
     else torch.device("mps") if torch.backends.mps.is_available()
     else torch.device("cpu")
 )
 
-# Load model
 model = torch.load("results/weights/dt_kitchen.pt",weights_only=False)
 model.to(device)
 model.device = device
 model.eval()
 
-# Load env
 dataset = minari.load_dataset('D4RL/kitchen/mixed-v2')
 env = dataset.recover_environment(render_mode="human")
 obs = env.reset()[0]
 
-# --- 推理缓存设置 ---
-max_len = 15  # 最多考虑多少步的历史
+max_len = 15 
 state_dim = obs["observation"].shape[0]
 action_dim = env.action_space.shape[0]
 return_to_go = 2.0  # 可以是一个经验值

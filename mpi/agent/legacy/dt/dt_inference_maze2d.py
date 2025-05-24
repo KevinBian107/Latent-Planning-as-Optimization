@@ -6,39 +6,33 @@ import os
 import sys
 import time
 
-# allow imports from project root
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-# --- 环境和模型设置 ---
 device = (
     torch.device("cuda") if torch.cuda.is_available()
     else torch.device("mps") if torch.backends.mps.is_available()
     else torch.device("cpu")
 )
 
-# Load your trained DT for U-Maze
 model = torch.load("results/weights/dt_maze2d_dense_umaze.pt", weights_only=False)
 model.to(device)
 model.device = device
 model.eval()
 
-# Load U-Maze environment
 dataset = minari.load_dataset('D4RL/pointmaze/medium-dense-v2', download=True)
 env = dataset.recover_environment(render_mode="human", eval_env=True)
-# reset() returns (obs_dict, info)
+
+
 obs_dict, _ = env.reset()
-# each obs_dict has keys 'observation', 'desired_goal', 'achieved_goal'
 obs        = obs_dict['observation']
 desired_g  = obs_dict['desired_goal']
 achieved_g = obs_dict['achieved_goal']
 
-# build initial full state
 full_state = np.concatenate([obs, desired_g, achieved_g], axis=0)
 state_dim  = full_state.shape[0]
 action_dim = env.action_space.shape[0]
 
-# inference buffer
-max_len      = 150  # 150 in your training
+max_len      = 150
 states       = deque([], maxlen=max_len)
 actions      = deque([], maxlen=max_len)
 rewards      = deque([], maxlen=max_len)
@@ -48,10 +42,8 @@ rtgs         = deque([], maxlen=max_len)
 total_reward = 0.0
 timestep     = 0
 
-# initial target return (you can tune this)
+# initial target return (can tune this)
 target_return = 0.0
-
-# fill buffers with zeros / initial state
 for _ in range(max_len):
     states.append(torch.tensor(full_state, dtype=torch.float32))
     actions.append(torch.zeros(action_dim))
@@ -77,7 +69,6 @@ def pad_scalar(seq, length):
     else:
         return data[-length:]
 
-# --- inference loop ---
 for step in range(5000):
     # build batch tensors
     states_tensor   = pad_seq(states,   max_len, state_dim).unsqueeze(0).to(device)

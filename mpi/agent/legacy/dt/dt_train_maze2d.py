@@ -6,15 +6,14 @@ import matplotlib.pyplot as plt
 import sys
 import minari
 
-# -------------------- 设置设备 --------------------
+from src.models.decision_transformer import DecisionTransformer
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
 
-# -------------------- 工作路径 --------------------
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-# -------------------- 超参数 --------------------
 MAX_LEN       = 150
 HIDDEN_SIZE   = 256
 N_LAYER       = 4
@@ -25,16 +24,15 @@ LEARNING_RATE = 1e-4
 
 context_len = MAX_LEN
 
-# -------------------- 加载 Maze2D U-Maze 数据 --------------------
 dataset = minari.load_dataset('D4RL/pointmaze/medium-dense-v2', download=True)
 
 sequence_data = []
 for episode in tqdm(dataset, desc="Loading U-Maze episodes"):
     obs_dict = episode.observations
     # Slice off last timestep so everything stays aligned
-    obs           = obs_dict['observation'][:-1]   # (T-1, obs_dim)
-    desired_goal  = obs_dict['desired_goal'][:-1]  # (T-1, goal_dim)
-    achieved_goal = obs_dict['achieved_goal'][:-1] # (T-1, goal_dim)
+    obs           = obs_dict['observation'][:-1] 
+    desired_goal  = obs_dict['desired_goal'][:-1] 
+    achieved_goal = obs_dict['achieved_goal'][:-1]
 
     # Concatenate into full state vector
     full_state_space = np.concatenate([obs, desired_goal, achieved_goal], axis=1)
@@ -69,9 +67,6 @@ for episode in tqdm(dataset, desc="Loading U-Maze episodes"):
 
 print(f"Loaded {len(sequence_data)} sequences from maze2d-umaze.")
 
-# -------------------- 初始化模型 --------------------
-from src.models.decision_transformer import DecisionTransformer
-
 state_dim = sequence_data[0]["observations"].shape[-1]
 act_dim   = sequence_data[0]["actions"].shape[-1]
 
@@ -87,7 +82,6 @@ model = DecisionTransformer(
 
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-# -------------------- 训练循环 --------------------
 all_losses = []
 
 for epoch in range(NUM_EPOCHS):
@@ -112,7 +106,6 @@ for epoch in range(NUM_EPOCHS):
         all_losses.append(loss.item())
         pbar.set_postfix(loss=f"{loss.item():.4f}")
 
-# -------------------- 保存模型 & 可视化 --------------------
 os.makedirs("results/weights", exist_ok=True)
 torch.save(model, "results/weights/dt_maze2d_dense_umaze.pt")
 print("Training complete. Weights saved to results/weights/dt_maze2d_umaze.pt")

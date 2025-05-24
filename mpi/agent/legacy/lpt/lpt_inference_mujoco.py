@@ -11,18 +11,15 @@ device = (
     else torch.device("cpu")
 )
 
-# Load model
 model = torch.load("results/weights/lpt_halfcheetah.pt", map_location="cpu",weights_only=False)  # or to('cuda')
 model.to(device)
 model.device = device
 model.eval()
 
-# Load env
 dataset = minari.load_dataset('mujoco/halfcheetah/expert-v0')
 env = dataset.recover_environment(render_mode="human")
 obs = env.reset()[0]
 
-# Context length
 context_len = 15
 state_dim = obs.shape[0]
 act_dim = model.act_dim  # assume this exists, otherwise hardcode

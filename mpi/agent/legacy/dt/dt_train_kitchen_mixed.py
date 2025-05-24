@@ -6,18 +6,21 @@ import matplotlib.pyplot as plt
 import sys
 import minari
 
-all_losses = []
-r_losses = []
-a_losses = []
-# -------------------- 设置设备 --------------------
+from utils.process_obs import process_observation, kitchen_goal_obs_dict
+
+from src.models.decision_transformer import DecisionTransformer
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
 
-# -------------------- 工作路径 --------------------
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from utils.process_obs import process_observation, kitchen_goal_obs_dict
-# -------------------- 超参数 --------------------
+
+
+all_losses = []
+r_losses = []
+a_losses = []
+
 MAX_LEN = 50
 HIDDEN_SIZE = 256
 N_LAYER = 4
@@ -28,11 +31,9 @@ LEARNING_RATE = 1e-4
 
 context_len = MAX_LEN
 
-# -------------------- 加载数据 --------------------
 dataset = minari.load_dataset('D4RL/kitchen/mixed-v2', download=True)
 # env = dataset.recover_environment()
 
-# 改为 List 缓存训练段
 sequence_data = []
 
 for episode in tqdm(dataset):
@@ -126,9 +127,6 @@ for episode in tqdm(dataset):
 
 print(f"Loaded {len(sequence_data)} sequences.")
 
-# -------------------- 初始化模型 --------------------
-from src.models.decision_transformer import DecisionTransformer
-
 model = DecisionTransformer(
     state_dim=observations.shape[1],
     act_dim=actions.shape[1],
@@ -140,9 +138,6 @@ model = DecisionTransformer(
 ).to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=LEARNING_RATE)
-
-# -------------------- 训练循环 --------------------
-
 
 for epoch in range(NUM_EPOCHS):
     pbar = tqdm(range(len(sequence_data) // BATCH_SIZE))

@@ -5,21 +5,19 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import sys
 import minari
+
+from src.models.LPT import LatentPlannerModel
+
 all_losses = []
 r_losses = []
 a_losses = []
 
-# -------------------- 设置设备 --------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
 
-device = torch.device("mps")
-
-# -------------------- 工作路径 --------------------
-import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-# -------------------- 超参数 --------------------
+
 MAX_LEN = 50
 HIDDEN_SIZE = 24
 N_LAYER = 3
@@ -30,11 +28,9 @@ LEARNING_RATE = 1e-4
 
 context_len = MAX_LEN
 
-# -------------------- 加载数据 --------------------
 dataset = minari.load_dataset('mujoco/halfcheetah/expert-v0', download=True)
 env = dataset.recover_environment()
 
-# 改为 List 缓存训练段
 sequence_data = []
 
 for episode in tqdm(dataset):
@@ -62,8 +58,6 @@ for episode in tqdm(dataset):
         })
 
 print(f"Loaded {len(sequence_data)} sequences.")
-
-from src.models.LPT import LatentPlannerModel  # 假设你实现了 LPT 类
 
 model = LatentPlannerModel(
     state_dim=observations.shape[1],
