@@ -39,5 +39,5 @@ jobs:
     - name: Run pytest
       run: |
         pytest -v \
-        tests/basic/test_load_yaml.py \
+        tests/test_load_yaml.py \
 #        tests/basic/test_dataloader.py \

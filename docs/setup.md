@@ -1,5 +1,4 @@
 # Installation
-
 ## Conda Setup Guide
 
 1. **Clone the Repository**
@@ -55,8 +54,6 @@ You can check if your installation is correct by running the following test file
 ```bash
 python tests/test_mpill_kitchen_seq.py
 ```
-
-
 
 ## Docker Setup Guide
 
@@ -115,4 +112,3 @@ You can debug in a one-off container using interactive bash shell:
 ```bash
 docker compose run --service-ports mpi bash
 ```
-
