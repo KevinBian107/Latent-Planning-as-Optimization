@@ -1,11 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from src.models.conditional_decision_transformer import ConditionalDecisionTransformer
-from src.models.unet1d import Unet1D
-from src.models.vae1d import VAE1D
+from agent.src.models.conditional_decision_transformer import ConditionalDecisionTransformer
+from agent.src.models.unet1d import Unet1D
+from agent.src.models.vae1d import VAE1D
+from agent.src.util_function import register_model
+
 from typing import Optional, Tuple
-from src.util_function import register_model
 
 class Swish(nn.Module):
     def forward(self, x):
@@ -125,50 +126,25 @@ class LatentPlannerModel(nn.Module):
         z = self.z_buffer[batch_inds]
 
         for _ in range(self.z_n_iters):
-            # z = z.detach().clone()
-            # z.requires_grad_(True)
-
-            # z_latent = self.unet_forward(z)
-
-            # # Predict reward
-            # pred_rewards = self.reward_forward(z_latent)
-            # reward_loss = torch.nn.MSELoss()(pred_rewards, rewards.squeeze(1))
-
-            # # Predict action
-            # pred_actions, _ = self.trajectory_generator(timesteps, states, actions, z_latent)
-            # target_actions = actions[:, -1, :] 
-            # action_loss = F.mse_loss(pred_actions, target_actions, reduction='mean')
-
-            # # Combine
-            # total_loss = self.reward_weight * reward_loss + self.action_weight * action_loss
-
-            # grad = torch.autograd.grad(total_loss, z)[0]
-            # z = z - 0.5 * self.langevin_step_size**2 * grad
-
-            # if self.z_with_noise:
-            #     z += self.noise_factor * self.langevin_step_size * torch.randn_like(z)
-
             z = z.detach().clone()
             z.requires_grad_(True)
 
-            # 1. Predict action
-            z_latent_action = self.unet_forward(z)
-            pred_actions, _ = self.trajectory_generator(timesteps, states, actions, z_latent_action)
-            target_actions = actions[:, -1, :] 
-            action_loss = F.mse_loss(pred_actions, target_actions, reduction='mean')
-            
-            # update z
-            z_grad_nll = torch.autograd.grad(action_loss, z)[0]
-            z = z - 0.5 * (self.langevin_step_size ** 2) * (z_grad_nll + z)
+            z_latent = self.unet_forward(z)
 
-            # 2. Predict reward
-            z_latent_reward = self.unet_forward(z)
-            pred_rewards = self.reward_forward(z_latent_reward)
+            # Predict reward
+            pred_rewards = self.reward_forward(z_latent)
             reward_loss = torch.nn.MSELoss()(pred_rewards, rewards.squeeze(1))
 
-            # update z
-            z_grad_mse = torch.autograd.grad(reward_loss, z)[0]
-            z = z - 0.5 * self.langevin_step_size ** 2 * z_grad_mse
+            # Predict action
+            pred_actions, _ = self.trajectory_generator(timesteps, states, actions, z_latent)
+            target_actions = actions[:, -1, :] 
+            action_loss = F.mse_loss(pred_actions, target_actions, reduction='mean')
+
+            # Combine
+            total_loss = self.reward_weight * reward_loss + self.action_weight * action_loss
+
+            grad = torch.autograd.grad(total_loss, z)[0]
+            z = z - 0.5 * self.langevin_step_size**2 * grad
 
             if self.z_with_noise:
                 z += self.noise_factor * self.langevin_step_size * torch.randn_like(z)
