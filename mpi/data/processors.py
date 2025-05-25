@@ -79,14 +79,36 @@ class SequenceProcessor(BaseProcessor):
         # acts = torch.tensor(episode['actions'], dtype=torch.float32)
         # rews = torch.tensor(episode['rewards'], dtype=torch.float32)
         
-        if isinstance(episode.observations, dict) and 'observation' in episode.observations:
-            obs = torch.tensor(episode.observations.observation[:-1], dtype=torch.float32)
+        # Check if episode is an object or a dictionary
+        if hasattr(episode, 'observations'):
+            # Episode is an object with attributes
+            if isinstance(episode.observations, dict) and 'observation' in episode.observations:
+                obs = torch.tensor(episode.observations["observation"][:-1], dtype=torch.float32)
+            else:
+                # Fallback to direct observations if observation key doesn't exist
+                obs = torch.tensor(episode.observations[:-1], dtype=torch.float32)
+                
+            acts = torch.tensor(episode.actions, dtype=torch.float32)
+            rews = torch.tensor(episode.rewards, dtype=torch.float32)
         else:
-            # Fallback to direct observations if observation key doesn't exist
-            obs = torch.tensor(episode.observations[:-1], dtype=torch.float32)
+            # Episode is a dictionary (which is the case for "segmeneter"-based dataset)
+            if isinstance(episode['observations'], dict) and 'observation' in episode['observations']:
+                obs = torch.tensor(episode['observations']["observation"][:-1], dtype=torch.float32)
+            else:
+                # Fallback to direct observations if observation key doesn't exist
+                obs = torch.tensor(episode['observations'][:-1], dtype=torch.float32)
+                
+            acts = torch.tensor(episode['actions'], dtype=torch.float32)
+            rews = torch.tensor(episode['rewards'], dtype=torch.float32)
+
+        # if isinstance(episode.observations, dict) and 'observation' in episode.observations:
+        #     obs = torch.tensor(episode.observations.observation[:-1], dtype=torch.float32)
+        # else:
+        #     # Fallback to direct observations if observation key doesn't exist
+        #     obs = torch.tensor(episode.observations[:-1], dtype=torch.float32)
         
-        acts = torch.tensor(episode.actions, dtype=torch.float32)
-        rews = torch.tensor(episode.rewards, dtype=torch.float32)
+        # acts = torch.tensor(episode.actions, dtype=torch.float32)
+        # rews = torch.tensor(episode.rewards, dtype=torch.float32)
         
         # compute more information:
         rtg = rews.flip([0]).cumsum(0).flip([0]).unsqueeze(-1)
