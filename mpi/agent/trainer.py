@@ -13,10 +13,10 @@ from checkpointing import MultiLogger
 from data.processors import SequenceProcessor, KitchenSegmenter
 from data.data_processor import DataProcessor
 from data.dataset import MinariTrajectoryDataset
-from data.batch_generator import TaskBatchGenerator
+from data.batch_generator import (TaskBatchGenerator, SingleTaskBatchGenerator)
 
 
-def process_dataloader(env_name: str, context_len, args):
+def process_dataloader(env_name: str, env_key: str, context_len, args):
 
     downloaded_data = minari.load_dataset(env_name, download=True)
     dataset = MinariTrajectoryDataset(dataset=downloaded_data)
@@ -26,50 +26,120 @@ def process_dataloader(env_name: str, context_len, args):
         device = args.training["device"]
     )
     
-    if "kitchen" in env_name:
-        kitchen_segmenter = KitchenSegmenter(
-            task_goal_keys=['microwave', 'kettle', 'light switch', 'slide cabinet'],
-            proximity_thresholds={
-                'microwave': 0.2,
-                'kettle': 0.3,
-                'light switch': 0.2,
-                'slide cabinet': 0.2
-            },
-            stability_duration=20
-        )
-
-        data_processor = DataProcessor()
-        processed_data = data_processor.process_dataset(
-            dataset=dataset,
-            pipeline_name='multi_task_segment',
-            processors={
+    # a better way to hand env and data processor mapping?
+    env_processors = {
+        "kitchen-complete-v2": lambda: {
+            'pipeline_name': 'multi_task_segment',
+            'processors': {
                 'sequence_processor': sequence_processor,
-                'segmenter_processor': kitchen_segmenter
-            }
-        )
+                'segmenter_processor': KitchenSegmenter(
+                    task_goal_keys=['microwave', 'kettle', 'light switch', 'slide cabinet'],
+                    proximity_thresholds={
+                        'microwave': 0.2,
+                        'kettle': 0.3,
+                        'light switch': 0.2,
+                        'slide cabinet': 0.2
+                    },
+                    stability_duration=20
+                )
+            },
+            'batch_style': 'task_batch_generator'
+        },
+
+        "kitchen-mixed-v2": lambda: {
+            'pipeline_name': 'single_task',
+            'processors': {'sequence_processor': sequence_processor}, 
+            'batch_style': 'single_task_batch_generator'
+        },
+
+        "halfcheetah-expert-v0": lambda: {
+            'pipeline_name': 'single_task',
+            'processors': {'sequence_processor': sequence_processor}, 
+            'batch_style': 'single_task_batch_generator'
+        }, 
+
+    }
+    
+    # Determine environment type
+    assert env_key in env_processors, f"Environment key '{env_key}' not found in processors mapping."
         
+    # Process the dataset using the appropriate configuration
+    data_processor = DataProcessor()
+    processor_config = env_processors[env_key]()
+    processed_data = data_processor.process_dataset(
+        dataset=dataset,
+        pipeline_name=processor_config['pipeline_name'],
+        processors=processor_config['processors']
+    )
+    batch_style = processor_config['batch_style']
+
+    if batch_style == 'task_batch_generator':
         batch_generator = TaskBatchGenerator(
-        processed_data=processed_data,
-        device=args.training["device"],
-        batch_size=args.training["batch_size"]
+            processed_data=processed_data,
+            device=args.training["device"],
+            batch_size=args.training["batch_size"]
         )
 
-        # You can dynamically set the task here if needed
         task_name = args.training.get("task_name", "microwave")
         task_name = args.training.get("task_name", env_name)
+        task_name = 'microwave'
+        # FIXME: 
+        # idealy, we will have a list of task name passed in to the train function
+        # the list of task name will be iterated during training loop and get_batch() will be called at the training time
+        # process_dataloader() function should return the batch generator object itself, not the get_batch function
+        return batch_generator.get_batch(task_name)
     
-    if "halfcheetah" in env_name:
-        data_processor = DataProcessor()
-        processed_data = data_processor.process_dataset(
-            dataset=dataset,
-            pipeline_name='single_task',
-            processors={'sequence_processor': sequence_processor}
+    if batch_style == 'single_task_batch_generator':
+        batch_generator = SingleTaskBatchGenerator(
+            processed_data=processed_data,
+            device=args.training["device"],
+            batch_size=args.training["batch_size"]
         )
+
+        return batch_generator.get_batch()
+
+    # if "kitchen" in env_name:
+    #     kitchen_segmenter = KitchenSegmenter(
+    #         task_goal_keys=['microwave', 'kettle', 'light switch', 'slide cabinet'],
+    #         proximity_thresholds={
+    #             'microwave': 0.2,
+    #             'kettle': 0.3,
+    #             'light switch': 0.2,
+    #             'slide cabinet': 0.2
+    #         },
+    #         stability_duration=20
+    #     )
+
+    #     data_processor = DataProcessor()
+    #     processed_data = data_processor.process_dataset(
+    #         dataset=dataset,
+    #         pipeline_name='multi_task_segment',
+    #         processors={
+    #             'sequence_processor': sequence_processor,
+    #             'segmenter_processor': kitchen_segmenter
+    #         }
+    #     )
         
-        
+    #     batch_generator = TaskBatchGenerator(
+    #     processed_data=processed_data,
+    #     device=args.training["device"],
+    #     batch_size=args.training["batch_size"]
+    #     )
+
+    #     # You can dynamically set the task here if needed
+    #     task_name = args.training.get("task_name", "microwave")
+    #     task_name = args.training.get("task_name", env_name)
+    
+    # if "halfcheetah" in env_name:
+    #     data_processor = DataProcessor()
+    #     processed_data = data_processor.process_dataset(
+    #         dataset=dataset,
+    #         pipeline_name='single_task',
+    #         processors={'sequence_processor': sequence_processor}
+    #     )
 
     
-    return batch_generator.get_batch(task_name)
+    # return batch_generator
 
 
 class BaseTrainer(ABC):
@@ -104,6 +174,7 @@ class BaseTrainer(ABC):
         env_name = env_mapping[env_key]
         return process_dataloader(
             env_name=env_name,
+            env_key=env_key,
             context_len= self.args.environment["context_len"],
             args=self.args
         )
