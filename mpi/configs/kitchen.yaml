@@ -26,7 +26,7 @@ BasicLPT:
 BasicDT:
   h_dim: 16
   context_len: 128
-  state_dim: 16
+  state_dim: 59
   act_dim: 9
   n_heads: 1
   n_blocks: 3
