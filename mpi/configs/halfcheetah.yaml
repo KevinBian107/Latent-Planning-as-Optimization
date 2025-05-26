@@ -3,12 +3,12 @@ path:
   weights_path: results/weights
   logs_path: results/logs
   videos_path: results/videos
-  experiment_name: LPT_kitchen
+  experiment_name: LPT_halfcheetah
 
 
 BasicLPT:
-  state_dim: 59 
-  act_dim: 9 
+  state_dim: 17  # TODO currently we hardcoded this,  is it possible to automatically infer this from data
+  act_dim: 6 # TODO same as above 
   context_len: 15
   h_dim: 16 
   n_blocks: 3 
@@ -26,8 +26,8 @@ BasicLPT:
 BasicDT:
   h_dim: 16
   context_len: 15
-  state_dim: 59
-  act_dim: 9
+  state_dim: 17
+  act_dim: 6
   n_heads: 1
   n_blocks: 3
   drop_p: 0.1
