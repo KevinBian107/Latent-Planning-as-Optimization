@@ -15,7 +15,6 @@ BasicLPT:
   n_heads: 1 
   drop_p: 0.1 
   n_latent: 4
-  device: cuda
   reward_weight: 1.0
   action_weight: 1.0
   z_n_iters: 10
@@ -52,7 +51,7 @@ environment:
   env_provider: minari #the env_type define the provider
   max_episode_steps: 5000
   seed: 42
-  context_len: 150
+  context_len: 128
 
 
 others:
