@@ -15,7 +15,7 @@ BasicLPT:
   n_heads: 1 
   drop_p: 0.1 
   n_latent: 4
-  # device: mps
+  device: mps
   reward_weight: 1.0
   action_weight: 1.0
   z_n_iters: 10
@@ -31,7 +31,7 @@ BasicDT:
   n_heads: 1
   n_blocks: 3
   drop_p: 0.1
-  # device: cpu
+  device: mps
 
 
 training:
@@ -40,9 +40,9 @@ training:
   weight_decay: 0.01
   epochs: 2
   grad_clip: 1.0
-  logger: ["tensorboard","file","wandb"]
+  logger: ["file","wandb"]
   debug: false
-  device: cpu
+  device: mps
   shuffle: true
   num_workers: 1
 

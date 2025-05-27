@@ -228,11 +228,14 @@ class DtTrainer(BaseTrainer):
                 self._save_model(os.path.join(self.args.path["checkpoint_path"], f"dt_epoch{epoch + 1}"))
 
         if save_pt:
-            self._save_model(self.args.path["weights_path"])
+            self._save_model(self.args.path["weights_path"],weight_only=False)
 
-    def _save_model(self, save_dir):
+    def _save_model(self, save_dir, weight_only = True):
         os.makedirs(save_dir, exist_ok=True)
-        torch.save(self.model.state_dict(), os.path.join(save_dir, "dt_model.pt"))
+        if weight_only:
+            torch.save(self.model.state_dict(), os.path.join(save_dir, "dt_model.pt"))
+        else:
+            torch.save(self.model,os.path.join(save_dir, "dt_model.pt"))
         print(f"[DT] Model saved to {save_dir}")
 
 
@@ -254,12 +257,12 @@ class LptTrainer(BaseTrainer):
         total_step = 0
         for epoch in range(self.args.training["epochs"]):
             # for i,batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
-            for i, batch in enumerate(tqdm(self.dataloader)):
+            for i, batch in enumerate(tqdm(self.dataloader),total = len(self.dataloader)):
                 batch_inds = torch.arange(batch["observations"].shape[0], device=self.device)
                 pred_action, pred_state, pred_reward = self.model(
                     states=batch["observations"].to(self.device),
                     actions=batch["prev_actions"].to(self.device),
-                    timesteps=batch["timesteps"].squeeze(-1),
+                    timesteps=batch["timesteps"].squeeze(-1).to(self.device),
                     rewards=torch.sum(batch["reward"],dim = 1).to(self.device),
                     batch_inds=batch_inds,
                 )

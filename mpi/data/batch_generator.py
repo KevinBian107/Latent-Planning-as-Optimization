@@ -125,7 +125,7 @@ class SingleTaskBatchGenerator(BatchGenerator):
             # Fill remainder of last batch if needed
             if len(batch_indices) < self.batch_size:
                 extra = np.random.choice(
-                    len(self.sequence_data), 
+                    len(self.processed_data), 
                     self.batch_size-len(batch_indices), 
                     replace=True
                 )
