@@ -27,6 +27,7 @@ class DataProcessor:
             'single_task': self._single_task_pipeline,
             'multi_task': self._multi_task_pipeline,
             'multi_task_segment': self._multi_task_pipeline_with_segmenter,
+            'mix_dataset': self._mix_dataset_pipeline,
             # Add more pipelines as needed
         }
 
@@ -149,5 +150,25 @@ class DataProcessor:
         
         return task_datasets
 
+
+    def _mix_dataset_pipeline(self, datasets: list, sequence_processor):
+        """
+        Process multiple datasets into sequences.
+        
+        Args:
+            datasets: List of TrajectoryDataset objects
+            
+        Returns:
+            List of processed sequences
+        """
+        sequences = []
+        
+        for dataset in tqdm(datasets, desc="Processing datasets"):
+            trajecotires = dataset.get_trajectories()
+            for trajectory in trajecotires:
+                processed_sequences = sequence_processor.process_episode(trajectory)
+                sequences.extend(processed_sequences)
+        
+        return sequences
 
     '''add more pipeline below as needed'''
