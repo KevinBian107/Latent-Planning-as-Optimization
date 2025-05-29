@@ -35,7 +35,7 @@ def process_dataloader(env_name: str, env_key: str, context_len, args):
     processed_data = data_processor.process_dataset(
         dataset=[dataset_expert, dataset_medium, dataset_simple],
         pipeline_name='mix_dataset',
-        processors=sequence_processor
+        processors={'sequence_processor': sequence_processor}
     )
 
     batch_generator = SingleTaskBatchGenerator(
@@ -44,7 +44,7 @@ def process_dataloader(env_name: str, env_key: str, context_len, args):
         batch_size=args.training["batch_size"]
     )
 
-    return batch_generator.get_batch()
+    return batch_generator
 
     # downloaded_data = minari.load_dataset(env_name, download=True)
     # dataset = MinariTrajectoryDataset(dataset=downloaded_data)
@@ -232,9 +232,10 @@ class DtTrainer(BaseTrainer):
     def mixed_train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
         self.model.to(self.device)
         total_step = 0
+        self.dataloader_batch = self.dataloader.get_batch()
         for epoch in range(self.args.training["epochs"]):
             # for i, batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
-            for i, batch in enumerate(tqdm(self.dataloader)):
+            for i, batch in enumerate(tqdm(self.dataloader_batch, total=len(self.dataloader))):
                 state_preds, action_preds, return_preds = self.model(
                 timesteps=batch["timesteps"].squeeze(-1).to(self.device),
                 states=batch["observations"].to(self.device),
@@ -283,9 +284,10 @@ class LptTrainer(BaseTrainer):
     def mixed_train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
         self.model.to(self.device)
         total_step = 0
+        self.dataloader_batch = self.dataloader.get_batch()
         for epoch in range(self.args.training["epochs"]):
             # for i,batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
-            for i, batch in enumerate(tqdm(self.dataloader),total = len(self.dataloader)):
+            for i, batch in enumerate(tqdm(self.dataloader_batch, total=len(self.dataloader))):
                 batch_inds = torch.arange(batch["observations"].shape[0], device=self.device)
                 pred_action, pred_state, pred_reward = self.model(
                     states=batch["observations"].to(self.device),
