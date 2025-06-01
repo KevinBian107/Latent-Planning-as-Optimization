@@ -8,8 +8,8 @@ import os
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 
-model = torch.load("results/weights/lpt_maze2d_umaze.pt", map_location="cpu" ,weights_only=False)  # or to('cuda')
-device ='cpu'
+model = torch.load("results/weights/lpt_maze2d_umaze.pt", map_location="mps" ,weights_only=False)  # or to('cuda')
+device ='mps'
 
 model.to(device)
 model.device = device
@@ -20,9 +20,9 @@ dataset = minari.load_dataset('D4RL/pointmaze/umaze-v2', download=True)
 
 env = dataset.recover_environment(render_mode="human")
 obs = env.reset()[0]
-obs = torch.cat([torch.tensor(obs["observation"]), torch.tensor(obs["achieved_goal"]), torch.tensor(obs["desired_goal"])],dim = -1).to(device)
+obs = torch.cat([torch.tensor(obs["observation"],dtype=torch.float32), torch.tensor(obs["achieved_goal"],dtype=torch.float32), torch.tensor(obs["desired_goal"],dtype=torch.float32)],dim = -1).to(device)
 
-context_len = 5
+context_len = 15
 state_dim = obs.shape[0]
 act_dim = model.act_dim
 
@@ -49,13 +49,14 @@ for t in range(STEP):
     rewards = torch.tensor([100], dtype=torch.float32).reshape(1,1).to(device = device)
     timesteps = torch.tensor([list(timestep_buffer)], dtype=torch.long).to(device = device)
 
-    pred_action, _, _ = model(states, actions, timesteps, rewards, batch_inds = torch.tensor([0]).to(device)) #batch_inds can be any tesnor actually as it won't be used in eval
+    pred_action, _, pred_reward,_ = model(states, actions, timesteps, rewards, batch_inds = torch.tensor([0]).to(device)) #batch_inds can be any tesnor actually as it won't be used in eval
     action = pred_action.squeeze().detach().cpu().numpy()  # last token prediction
+    print(pred_reward)
 
     next_obs, reward, done, truncated, info = env.step(action)
-    next_obs = torch.cat([torch.tensor(next_obs["observation"]), 
-                          torch.tensor(next_obs["achieved_goal"]), 
-                          torch.tensor(next_obs["desired_goal"])],dim = -1).to(device)
+    next_obs = torch.cat([torch.tensor(next_obs["observation"],dtype=torch.float32), 
+                          torch.tensor(next_obs["achieved_goal"],dtype=torch.float32), 
+                          torch.tensor(next_obs["desired_goal"],dtype=torch.float32)],dim = -1).to(device)
     env.render()
     
     total_reward += reward
@@ -68,7 +69,7 @@ for t in range(STEP):
 
     if done or truncated:
         obs = env.reset()[0]
-        obs = torch.cat([torch.tensor(obs["observation"]), torch.tensor(obs["achieved_goal"]), torch.tensor(obs["desired_goal"])],dim = -1).to(device)
+        obs = torch.cat([torch.tensor(obs["observation"],dtype=torch.float32), torch.tensor(obs["achieved_goal"],dtype=torch.float32), torch.tensor(obs["desired_goal"],dtype=torch.float32)],dim = -1).to(device)
         state_buffer.clear()
         action_buffer.clear()
         timestep_buffer.clear()

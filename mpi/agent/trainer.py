@@ -289,7 +289,7 @@ class LptTrainer(BaseTrainer):
             # for i,batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
             for i, batch in enumerate(tqdm(self.dataloader_batch, total=len(self.dataloader))):
                 batch_inds = torch.arange(batch["observations"].shape[0], device=self.device)
-                pred_action, pred_state, pred_reward = self.model(
+                pred_action, pred_state, pred_reward, z_latent = self.model(
                     states=batch["observations"].to(self.device),
                     actions=batch["prev_actions"].to(self.device),
                     timesteps=batch["timesteps"].squeeze(-1).to(self.device),

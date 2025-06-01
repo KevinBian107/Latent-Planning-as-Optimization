@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from agent.src.models.conditional_decision_transformer import ConditionalDecisionTransformer
-from agent.src.models.unet1d import Unet1D
+from agent.src.models.unet1d import Unet1D,SimpleUnet1D
 from agent.src.models.vae1d import VAE1D
 from agent.src.util_function import register_model
 
@@ -28,7 +28,8 @@ class LatentPlannerModel(nn.Module):
                  action_weight: float = 1.0,
                  z_n_iters: int = 3,
                  langevin_step_size: float = 0.3,
-                 noise_factor: float = 1.0):
+                 noise_factor: float = 0.1,
+                 debug: bool = False):
         super().__init__()
 
         self.state_dim = state_dim
@@ -39,10 +40,11 @@ class LatentPlannerModel(nn.Module):
         self.z_dim = h_dim * n_latent
         self.z_best_idx = 0
         self.y_max = 0
+        self.debug = debug
 
         self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        self.planner = Unet1D(dim=self.z_dim, channels=1, dim_mults=(1, 2, 4)).to(self.device)
+        self.planner = SimpleUnet1D(dim=self.z_dim, channels=1, dim_mults=(1, 2, 4)).to(self.device)
         # self.planner = VAE1D(dim=self.z_dim).to(self.device)
         
         self.trajectory_generator = ConditionalDecisionTransformer(
@@ -56,7 +58,7 @@ class LatentPlannerModel(nn.Module):
 
         # Langevin sampling settings
         self.z_n_iters = z_n_iters
-        self.z_with_noise = True
+        self.z_with_noise = False
         self.noise_factor = noise_factor
         self.langevin_step_size = langevin_step_size
 
@@ -82,7 +84,7 @@ class LatentPlannerModel(nn.Module):
         pred_actions, _ = self.trajectory_generator(timesteps, states, actions, z_latent)
         return pred_actions
     
-    def infer_z_given_y(self, y, step_size=0.3, debug=False, omega_cg=1.0):
+    def infer_z_given_y(self, y, step_size=0.3, omega_cg=1.0):
         self.eval()
 
         batch_size = y.shape[0]
@@ -112,7 +114,7 @@ class LatentPlannerModel(nn.Module):
 
             z_mse_grads_norm.append(torch.norm(z_grad, dim=1).mean().item())
 
-            if debug:
+            if self.debug:
                 print(f"[{i}] MSE: {mse.item():.4f}, GradNorm: {z_mse_grads_norm[-1]:.4f}")
 
         z = z.detach()
@@ -156,7 +158,7 @@ class LatentPlannerModel(nn.Module):
             z_latent_action = self.unet_forward(z)
             pred_actions, _ = self.trajectory_generator(timesteps, states, actions, z_latent_action)
             target_actions = actions[:, -1, :] 
-            action_loss = F.mse_loss(pred_actions, target_actions, reduction='mean')
+            action_loss = F.l1_loss(pred_actions, target_actions)
             
             # update z
             z_grad_nll = torch.autograd.grad(action_loss, z)[0]
@@ -165,7 +167,7 @@ class LatentPlannerModel(nn.Module):
             # 2. Predict reward
             z_latent_reward = self.unet_forward(z)
             pred_rewards = self.reward_forward(z_latent_reward)
-            reward_loss = torch.nn.MSELoss()(pred_rewards, rewards.squeeze(1))
+            reward_loss = F.l1_loss(pred_rewards, rewards.squeeze(1))
 
             # update z
             z_grad_mse = torch.autograd.grad(reward_loss, z)[0]
@@ -173,6 +175,8 @@ class LatentPlannerModel(nn.Module):
 
             if self.z_with_noise:
                 z += self.noise_factor * self.langevin_step_size * torch.randn_like(z)
+            if self.debug:
+                print(f"z_grad_mse: {z_grad_mse.mean().item():.4f}, z_grad_nll: {z_grad_nll.mean().item():.4f}")
 
         z = z.detach()
         self.z_buffer[batch_inds] = z
@@ -207,9 +211,10 @@ class LatentPlannerModel(nn.Module):
         z_latent = self.unet_forward(z)
 
         # 3. Predict next action and state
+
         pred_action, pred_state = self.trajectory_generator(timesteps, states, actions, z_latent)
-
-        # 4. Predict reward
         pred_reward = self.reward_forward(z_latent)
+        return pred_action, pred_state, pred_reward, z_latent
 
-        return pred_action, pred_state, pred_reward
+
+        

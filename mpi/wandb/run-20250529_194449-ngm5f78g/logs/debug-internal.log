@@ -1,0 +1,7 @@
+{"time":"2025-05-29T19:44:49.039491-07:00","level":"INFO","msg":"stream: starting","core version":"0.19.11","symlink path":"/Users/gongzhenghao/Desktop/repo/research/Meta-Planning-as-Inference/mpi/wandb/run-20250529_194449-ngm5f78g/logs/debug-core.log"}
+{"time":"2025-05-29T19:44:49.240735-07:00","level":"INFO","msg":"created new stream","id":"ngm5f78g"}
+{"time":"2025-05-29T19:44:49.240764-07:00","level":"INFO","msg":"stream: started","id":"ngm5f78g"}
+{"time":"2025-05-29T19:44:49.240786-07:00","level":"INFO","msg":"writer: Do: started","stream_id":"ngm5f78g"}
+{"time":"2025-05-29T19:44:49.240795-07:00","level":"INFO","msg":"handler: started","stream_id":"ngm5f78g"}
+{"time":"2025-05-29T19:44:49.240805-07:00","level":"INFO","msg":"sender: started","stream_id":"ngm5f78g"}
+{"time":"2025-05-29T19:44:49.415381-07:00","level":"INFO","msg":"Starting system monitor"}

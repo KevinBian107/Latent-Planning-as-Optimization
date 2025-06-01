@@ -31,7 +31,6 @@ BasicDT:
   n_heads: 1
   n_blocks: 3
   drop_p: 0.1
-  device: mps
 
 
 training:
