@@ -9,7 +9,7 @@ import pdb
 
 from agent.src.models import get_model
 from checkpointing import MultiLogger
-
+from utils.contrastive_loss import reward_latent_consistency_loss
 from data.processors import SequenceProcessor, KitchenSegmenter
 from data.data_processor import DataProcessor
 from data.dataset import MinariTrajectoryDataset
@@ -300,16 +300,24 @@ class LptTrainer(BaseTrainer):
                 self.optimizer.zero_grad()
                 loss_r = torch.nn.MSELoss()(pred_reward, torch.sum(batch["reward"], dim = 1).squeeze(1).to(self.device))
                 loss_a = torch.nn.MSELoss()(pred_action, batch["actions"][:, -1].to(self.device))
-                loss = 0.25 * loss_r + loss_a
+                reward_contrastive_loss  = reward_latent_consistency_loss(z_latent,pred_reward)
+                loss = 0.000025 * loss_r + loss_a 
                 loss.backward()
                 self.optimizer.step()
                 total_step += 1
+                actual_reward_values = torch.sum(batch["reward"], dim=1).squeeze(1).detach().cpu()
                 if i%10 == 0:
                     self.logger.log_info({"step":total_step,
                                         "text":{"training_loss":loss.item()},
                                         "scalars":{"MSE of Action":loss_a.cpu(),
                                                    "MSE of Rewards":loss_r.cpu(),
-                                                   "MSE of Total":loss.cpu()},
+                                                   "MSE of Total":loss.cpu(),
+                                                   "reward contrastive loss":reward_contrastive_loss.item(),
+                                                   "predicted reward var":pred_reward.var().item(),
+                                                   "actual reward var":actual_reward_values.var().item(),
+                                                   "predicted reward mean":pred_reward.mean().item(),
+                                                   "actual reward mean":actual_reward_values.mean().item(),
+                                                   },
                                         })
             if save_checkpoints:
                 self._save_model(os.path.join(self.args.path["checkpoint_path"], f"dt_epoch{epoch + 1}"))

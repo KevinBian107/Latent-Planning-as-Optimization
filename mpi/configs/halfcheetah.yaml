@@ -9,9 +9,9 @@ path:
 BasicLPT:
   state_dim: 17  # TODO currently we hardcoded this,  is it possible to automatically infer this from data
   act_dim: 6 # TODO same as above 
-  context_len: 15
-  h_dim: 16 
-  n_blocks: 3 
+  context_len: 150
+  h_dim: 32 
+  n_blocks: 4 
   n_heads: 1 
   drop_p: 0.1 
   n_latent: 4
