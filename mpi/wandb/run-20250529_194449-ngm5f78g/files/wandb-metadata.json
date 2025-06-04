@@ -1,0 +1,43 @@
+{
+  "os": "macOS-15.1-arm64-arm-64bit",
+  "python": "CPython 3.8.20",
+  "startedAt": "2025-05-30T02:44:49.038102Z",
+  "program": "/Users/gongzhenghao/Desktop/repo/research/Meta-Planning-as-Inference/mpi/agent/legacy/lpt/lpt_train_maze2d.py",
+  "codePath": "mpi/agent/legacy/lpt/lpt_train_maze2d.py",
+  "git": {
+    "remote": "https://github.com/KevinBian107/Meta-Planning-as-Inference.git",
+    "commit": "56a64fa29daa5b16a719267d1a46250670abd559"
+  },
+  "email": "george.zhenghaogong@gmail.com",
+  "root": "/Users/gongzhenghao/Desktop/repo/research/Meta-Planning-as-Inference/mpi",
+  "host": "gongzhenghaodeMacBook-Pro-2.local",
+  "executable": "/opt/anaconda3/envs/mpi/bin/python",
+  "codePathLocal": "agent/legacy/lpt/lpt_train_maze2d.py",
+  "cpu_count": 14,
+  "cpu_count_logical": 14,
+  "disk": {
+    "/": {
+      "total": "494384795648",
+      "used": "172485279744"
+    },
+    "/System/Volumes/Data": {
+      "total": "494384795648",
+      "used": "172485279744"
+    }
+  },
+  "memory": {
+    "total": "51539607552"
+  },
+  "cpu": {
+    "count": 14,
+    "countLogical": 14
+  },
+  "apple": {
+    "name": "Apple M4 Pro",
+    "ecpuCores": 4,
+    "pcpuCores": 10,
+    "gpuCores": 20,
+    "memoryGb": 48,
+    "ramTotalBytes": "51539607552"
+  }
+}

@@ -9,13 +9,13 @@ path:
 BasicLPT:
   state_dim: 17  # TODO currently we hardcoded this,  is it possible to automatically infer this from data
   act_dim: 6 # TODO same as above 
-  context_len: 15
-  h_dim: 16 
-  n_blocks: 3 
+  context_len: 150
+  h_dim: 32 
+  n_blocks: 4 
   n_heads: 1 
   drop_p: 0.1 
   n_latent: 4
-  # device: mps
+  device: mps
   reward_weight: 1.0
   action_weight: 1.0
   z_n_iters: 10
@@ -31,7 +31,6 @@ BasicDT:
   n_heads: 1
   n_blocks: 3
   drop_p: 0.1
-  # device: cpu
 
 
 training:
@@ -40,9 +39,9 @@ training:
   weight_decay: 0.01
   epochs: 2
   grad_clip: 1.0
-  logger: ["tensorboard","file","wandb"]
+  logger: ["file","wandb"]
   debug: false
-  device: cpu
+  device: mps
   shuffle: true
   num_workers: 1
 

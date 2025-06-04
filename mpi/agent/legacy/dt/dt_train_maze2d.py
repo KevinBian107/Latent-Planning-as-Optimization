@@ -5,17 +5,16 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 import sys
 import minari
-
-from src.models.decision_transformer import DecisionTransformer
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+from agent.src.models.decision_transformer import DecisionTransformer
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if not torch.cuda.is_available() and torch.backends.mps.is_available():
     device = torch.device("mps")
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 MAX_LEN       = 150
-HIDDEN_SIZE   = 256
+HIDDEN_SIZE   = 128
 N_LAYER       = 4
 N_HEAD        = 1
 BATCH_SIZE    = 128

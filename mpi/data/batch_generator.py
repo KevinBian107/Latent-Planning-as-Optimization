@@ -105,6 +105,12 @@ class SingleTaskBatchGenerator(BatchGenerator):
         self.device = device
         self.shuffle = shuffle
     
+    def __len__(self):
+        """Return the number of batches that will be generated."""
+        if isinstance(self.processed_data, list):
+            return (len(self.processed_data) + self.batch_size - 1) // self.batch_size
+        return 0  # Or raise an error if length can't be determined
+
     def get_batch(self):
         """
         Generate batches for single task sequence data.
@@ -125,7 +131,7 @@ class SingleTaskBatchGenerator(BatchGenerator):
             # Fill remainder of last batch if needed
             if len(batch_indices) < self.batch_size:
                 extra = np.random.choice(
-                    len(self.sequence_data), 
+                    len(self.processed_data), 
                     self.batch_size-len(batch_indices), 
                     replace=True
                 )

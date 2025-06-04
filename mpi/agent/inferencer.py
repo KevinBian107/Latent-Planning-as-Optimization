@@ -63,7 +63,7 @@ class BaseInferencer(ABC):
         else:
             raise ValueError(f"Unknown model name: {model_name}")
 
-        return torch.load(f"{path}/{fname}")
+        return torch.load(f"{path}/{fname}",weights_only=False)
 
     def construct_obs(self, raw_obs):
         # 默认使用 reset_mapping 函数，也支持被子类 override

@@ -6,8 +6,8 @@ import os
 import sys
 import time
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
+print(os.getcwd())
 device = (
     torch.device("cuda") if torch.cuda.is_available()
     else torch.device("mps") if torch.backends.mps.is_available()
