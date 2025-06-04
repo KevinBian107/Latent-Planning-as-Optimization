@@ -31,8 +31,16 @@ class BaseProcessor(ABC):
 class SequenceProcessor(BaseProcessor):
     """
     Processes trajectory segments into fixed-length sequences for training.
+    
+    First fit the entire datast to get state mean and std for normalization.
     """
-    def __init__(self, context_len, device="cpu"):
+    def __init__(
+            self, 
+            context_len,
+            reward_scale=1.0, 
+            device="cpu", 
+            normalize_states=True
+        ): 
         """
         Initialize the processor.
         
@@ -42,9 +50,55 @@ class SequenceProcessor(BaseProcessor):
         self.max_len = context_len
         self.device = device
         self.sequence_data = []
-    
+
+        # Whether to normalize states
+        self.normalize_states = normalize_states
+        self.reward_scale = reward_scale
+        self.state_mean = None
+        self.state_std = None
+        self.is_fitted = False
+
+    def fit(self, data):
+        self.state_mean, self.state_std = self._compute_state_stats(data)
+
+        self.is_fitted = True
+
     def process(self, data):
+        # If normalize_states is True, verify the processor is fitted
+        assert not self.normalize_states or self.is_fitted, "SequenceProcessor must be fitted before processing."
         return self.process_episode(data)
+    
+    "----Helper Functions----"
+    def _compute_state_stats(self, data):
+        """Compute state mean and std for normalization."""
+        trajectories = data.get_trajectories()
+        states = []
+        for trajectory in trajectories:
+            if hasattr(trajectory, 'observations'):
+                if isinstance(trajectory.observations, dict):
+                    states.extend(trajectory.observations["observation"])
+                else:
+                    states.extend(trajectory.observations)
+            else:
+                if isinstance(trajectory['observations'], dict):
+                    states.extend(trajectory['observations']["observation"])
+                else:
+                    states.extend(trajectory['observations'])
+        
+        states = np.vstack(states)
+        state_mean = np.mean(states, axis=0)
+        state_std = np.std(states, axis=0) + 1e-6
+
+        return state_mean, state_std
+
+    # Do we need discounted cumulative sum?    
+    # def _discount_cumsum(self, rewards, gamma=1.0):
+    #     """Compute discounted cumulative rewards."""
+    #     discounted_rtg = torch.zeros_like(rewards)
+    #     discounted_rtg[-1] = rewards[-1]
+    #     for t in range(len(rewards)-2, -1, -1):
+    #         discounted_rtg[t] = rewards[t] + gamma * discounted_rtg[t+1]
+    #     return discounted_rtg.unsqueeze(-1)
 
     def process_episode(self, episode):
         """
@@ -69,15 +123,6 @@ class SequenceProcessor(BaseProcessor):
         - prev_actions: (context_len, act_dim)
         - timesteps: (context_len, 1)
         """
-        # Handle both array and dictionary observations
-        # pdb.set_trace()
-        # if isinstance(episode['observations'], dict) and 'observation' in episode['observations']:
-        #     obs = torch.tensor(episode['observations']["observation"][:-1], dtype=torch.float32)
-        # else:
-        #     # Fallback to direct observations if observation key doesn't exist
-        #     obs = torch.tensor(episode['observations'][:-1], dtype=torch.float32)
-        # acts = torch.tensor(episode['actions'], dtype=torch.float32)
-        # rews = torch.tensor(episode['rewards'], dtype=torch.float32)
         
         # Check if episode is an object or a dictionary
         if hasattr(episode, 'observations'):
@@ -101,17 +146,19 @@ class SequenceProcessor(BaseProcessor):
             acts = torch.tensor(episode['actions'], dtype=torch.float32)
             rews = torch.tensor(episode['rewards'], dtype=torch.float32)
 
-        # if isinstance(episode.observations, dict) and 'observation' in episode.observations:
-        #     obs = torch.tensor(episode.observations.observation[:-1], dtype=torch.float32)
-        # else:
-        #     # Fallback to direct observations if observation key doesn't exist
-        #     obs = torch.tensor(episode.observations[:-1], dtype=torch.float32)
-        
-        # acts = torch.tensor(episode.actions, dtype=torch.float32)
-        # rews = torch.tensor(episode.rewards, dtype=torch.float32)
-        
+        # state normalization
+        if self.normalize_states and self.state_mean is not None and self.state_std is not None:
+            obs = (obs - torch.tensor(self.state_mean, dtype=torch.float32)) / \
+                  torch.tensor(self.state_std, dtype=torch.float32)
+
+
         # compute more information:
         rtg = rews.flip([0]).cumsum(0).flip([0]).unsqueeze(-1)
+        # rtg = self._discount_cumsum(rews, gamma=self.gamma) do we use discont cunsium?
+        
+        # reward scaling
+        if self.reward_scale != 1.0:
+            rtg = rtg / self.reward_scale
         prev_acts = torch.cat([torch.zeros_like(acts[:1]), acts[:-1]], dim=0)
         timesteps = torch.arange(len(obs)).unsqueeze(-1)
         
@@ -121,12 +168,17 @@ class SequenceProcessor(BaseProcessor):
         if obs.shape[0] < self.max_len:
             # pad the sequence to max_len
             pad_len = self.max_len - obs.shape[0]
-            obs = torch.cat([obs, torch.zeros(pad_len, obs.shape[1], dtype=obs.dtype)], dim=0)
-            acts = torch.cat([acts, torch.zeros(pad_len, acts.shape[1], dtype=acts.dtype)], dim=0)
-            rews = torch.cat([rews, torch.zeros(pad_len, dtype=rews.dtype)], dim=0)
-            rtg = torch.cat([rtg, torch.zeros(pad_len, 1, dtype=rtg.dtype)], dim=0)
-            prev_acts = torch.cat([prev_acts, torch.zeros(pad_len, prev_acts.shape[1], dtype=prev_acts.dtype)], dim=0)
-            timesteps = torch.cat([timesteps, torch.zeros(pad_len, 1, dtype=timesteps.dtype)], dim=0)
+
+            # prepending 0 instead of appending
+            obs = torch.cat([torch.zeros(pad_len, obs.shape[1], dtype=obs.dtype), obs], dim=0)
+            acts = torch.cat([torch.zeros(pad_len, acts.shape[1], dtype=acts.dtype), acts], dim=0)
+            rews = torch.cat([torch.zeros(pad_len, dtype=rews.dtype), rews], dim=0)
+            rtg = torch.cat([torch.zeros(pad_len, 1, dtype=rtg.dtype), rtg], dim=0)
+            prev_acts = torch.cat([torch.zeros(pad_len, prev_acts.shape[1], dtype=prev_acts.dtype), prev_acts], dim=0)
+            timesteps = torch.cat([torch.zeros(pad_len, 1, dtype=timesteps.dtype), timesteps], dim=0)
+
+            # attention mask
+            mask = torch.cat([torch.zeros(pad_len, dtype=torch.float32), torch.ones(obs.shape[0]-pad_len, dtype=torch.float32)], dim=0)
 
             # add the padded sequence
             sequences.append({
@@ -136,6 +188,7 @@ class SequenceProcessor(BaseProcessor):
                 "return_to_go": rtg, 
                 "prev_actions": prev_acts,
                 "timesteps": timesteps,
+                "attention_mask": mask
             })
             return sequences
         

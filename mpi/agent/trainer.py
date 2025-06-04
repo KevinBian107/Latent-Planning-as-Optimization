@@ -25,6 +25,8 @@ def process_dataloader(env_name: str, env_key: str, context_len, args):
         context_len = context_len,
         device = args.training["device"]
     )
+
+    sequence_processor.fit(dataset)
     
     # a better way to hand env and data processor mapping?
     env_processors = {
