@@ -19,22 +19,24 @@ from data.batch_generator import (TaskBatchGenerator, SingleTaskBatchGenerator)
 def process_dataloader(env_name: str, env_key: str, context_len, args):
 
     downloaded_dataset_expert = minari.load_dataset('mujoco/halfcheetah/expert-v0', download=True)
-    downloaded_dataset_medium = minari.load_dataset('mujoco/halfcheetah/medium-v0', download=True)
-    downloaded_dataset_simple = minari.load_dataset('mujoco/halfcheetah/simple-v0', download=True)
+    #downloaded_dataset_medium = minari.load_dataset('mujoco/halfcheetah/medium-v0', download=True)
+    #downloaded_dataset_simple = minari.load_dataset('mujoco/halfcheetah/simple-v0', download=True)
 
     dataset_expert = MinariTrajectoryDataset(dataset=downloaded_dataset_expert)
-    dataset_medium = MinariTrajectoryDataset(dataset=downloaded_dataset_medium)
-    dataset_simple = MinariTrajectoryDataset(dataset=downloaded_dataset_simple)
+    #dataset_medium = MinariTrajectoryDataset(dataset=downloaded_dataset_medium)
+    #dataset_simple = MinariTrajectoryDataset(dataset=downloaded_dataset_simple)
 
     sequence_processor = SequenceProcessor(
         context_len = context_len,
         device = args.training["device"]
     )
+    
+    sequence_processor.fit(dataset_expert)
 
     data_processor = DataProcessor()
     processed_data = data_processor.process_dataset(
-        dataset=[dataset_expert, dataset_medium, dataset_simple],
-        pipeline_name='mix_dataset',
+        dataset=[dataset_expert],
+        pipeline_name='single_task',
         processors={'sequence_processor': sequence_processor}
     )
 
