@@ -8,9 +8,9 @@ path:
 
 BasicLPT:
   state_dim: 8  
-  act_dim: 2 
+  act_dim: 2
   context_len: 150
-  h_dim: 128 
+  h_dim: 64 
   n_blocks: 4 
   n_heads: 1 
   drop_p: 0.1 
