@@ -10,15 +10,15 @@ BasicLPT:
   state_dim: 8  
   act_dim: 2
   context_len: 150
-  h_dim: 64 
+  h_dim: 256 
   n_blocks: 4 
   n_heads: 1 
   drop_p: 0.1 
-  n_latent: 4
+  n_latent: 32
   device: mps
   reward_weight: 1.0
   action_weight: 1.0
-  z_n_iters: 10
+  z_n_iters: 20
   langevin_step_size: 0.3
   noise_factor: 0.1
 
