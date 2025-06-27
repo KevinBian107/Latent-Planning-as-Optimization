@@ -54,8 +54,11 @@ class ConditionalDecisionTransformer(nn.Module):
 
         # 4. Predict next action and next state based on last tokens
         # last action embedding => predict next action
-        last_state_emb = h[:, -2]  # last state token
-        last_action_emb = h[:, -1]  # last action token
+        #last_state_emb = h[:, -2]  # last state token
+        #last_action_emb = h[:, -1]  # last action token
+
+        last_state_emb = h[:, 0::2, :]
+        last_action_emb = h[:, 1::2, :]
 
         pred_action = self.predict_action(last_state_emb)
         pred_state = self.predict_state(last_action_emb)

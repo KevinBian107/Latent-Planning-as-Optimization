@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import sys
 import minari
 import torch.nn.functional as F
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
 from utils.contrastive_loss import reward_latent_consistency_loss
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))

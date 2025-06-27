@@ -76,7 +76,12 @@ class SequenceProcessor(BaseProcessor):
         for trajectory in trajectories:
             if hasattr(trajectory, 'observations'):
                 if isinstance(trajectory.observations, dict):
-                    states.extend(trajectory.observations["observation"])
+                    if 'achieved_goal' in trajectory.observations.keys() and 'desired_goal' in trajectory.observations.keys():
+                        states.append(np.concatenate((trajectory.observations["observation"],
+                                                      trajectory.observations["desired_goal"],
+                                                      trajectory.observations["achieved_goal"]),axis = -1))
+                    else:
+                        states.extend(trajectory.observations["observation"])
                 else:
                     states.extend(trajectory.observations)
             else:
@@ -122,6 +127,7 @@ class SequenceProcessor(BaseProcessor):
         - return_to_go: (context_len, 1)
         - prev_actions: (context_len, act_dim)
         - timesteps: (context_len, 1)
+        - mask: (context_len, 1)
         """
         
         # Check if episode is an object or a dictionary
@@ -129,6 +135,10 @@ class SequenceProcessor(BaseProcessor):
             # Episode is an object with attributes
             if isinstance(episode.observations, dict) and 'observation' in episode.observations:
                 obs = torch.tensor(episode.observations["observation"][:-1], dtype=torch.float32)
+                if 'achieved_goal' in episode.observations.keys() and 'desired_goal' in episode.observations.keys():
+                    desired_goal_tensor = torch.tensor(episode.observations["desired_goal"][:-1], dtype=torch.float32)
+                    achieved_goal_tensor = torch.tensor(episode.observations["achieved_goal"][:-1], dtype=torch.float32)
+                    obs = torch.cat([obs,desired_goal_tensor,achieved_goal_tensor],dim = -1)
             else:
                 # Fallback to direct observations if observation key doesn't exist
                 obs = torch.tensor(episode.observations[:-1], dtype=torch.float32)
@@ -178,7 +188,8 @@ class SequenceProcessor(BaseProcessor):
             timesteps = torch.cat([torch.zeros(pad_len, 1, dtype=timesteps.dtype), timesteps], dim=0)
 
             # attention mask
-            mask = torch.cat([torch.zeros(pad_len, dtype=torch.float32), torch.ones(obs.shape[0]-pad_len, dtype=torch.float32)], dim=0)
+            mask = torch.cat([torch.zeros(pad_len), torch.ones(obs.shape[0]-pad_len)], dim=0)
+            #fill the padding timesteps with 0, otherwise with 1
 
             # add the padded sequence
             sequences.append({
@@ -202,6 +213,7 @@ class SequenceProcessor(BaseProcessor):
                 "return_to_go": rtg[i:i+self.max_len],
                 "prev_actions": prev_acts[i:i+self.max_len],
                 "timesteps": timesteps[i:i+self.max_len],
+                "attention_mask": torch.ones((self.max_len,1)) #if they is not padding, fill with 1
             })
         
         return sequences

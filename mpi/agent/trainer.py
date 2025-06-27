@@ -18,7 +18,7 @@ from data.batch_generator import (TaskBatchGenerator, SingleTaskBatchGenerator)
 
 def process_dataloader(env_name: str, env_key: str, context_len, args):
 
-    downloaded_dataset_expert = minari.load_dataset('mujoco/halfcheetah/expert-v0', download=True)
+    downloaded_dataset_expert = minari.load_dataset(env_name, download=True)
     #downloaded_dataset_medium = minari.load_dataset('mujoco/halfcheetah/medium-v0', download=True)
     #downloaded_dataset_simple = minari.load_dataset('mujoco/halfcheetah/simple-v0', download=True)
 
@@ -194,7 +194,8 @@ class BaseTrainer(ABC):
         env_mapping = {
             "kitchen-mixed-v2": "D4RL/kitchen/mixed-v2",
             "kitchen-complete-v2": "D4RL/kitchen/complete-v2",
-            "halfcheetah-expert-v0": "mujoco/halfcheetah/expert-v0"
+            "halfcheetah-expert-v0": "mujoco/halfcheetah/expert-v0",
+            "maze2d-umaze-v2": "D4RL/pointmaze/umaze-v2"
         }
 
         env_key = self.args.environment["name"]
@@ -286,8 +287,8 @@ class LptTrainer(BaseTrainer):
     def mixed_train(self, save_pt=True, save_dir="results/weights", save_checkpoints=True):
         self.model.to(self.device)
         total_step = 0
-        self.dataloader_batch = self.dataloader.get_batch()
         for epoch in range(self.args.training["epochs"]):
+            self.dataloader_batch = self.dataloader.get_batch()
             # for i,batch in tqdm(enumerate(self.dataloader),total = len(self.dataloader)):
             for i, batch in enumerate(tqdm(self.dataloader_batch, total=len(self.dataloader))):
                 batch_inds = torch.arange(batch["observations"].shape[0], device=self.device)
@@ -297,13 +298,14 @@ class LptTrainer(BaseTrainer):
                     timesteps=batch["timesteps"].squeeze(-1).to(self.device),
                     rewards=torch.sum(batch["reward"],dim = 1).to(self.device),
                     batch_inds=batch_inds,
+                    attention_mask = batch["attention_mask"],
                 )
 
                 self.optimizer.zero_grad()
                 loss_r = torch.nn.MSELoss()(pred_reward, torch.sum(batch["reward"], dim = 1).squeeze(1).to(self.device))
-                loss_a = torch.nn.MSELoss()(pred_action, batch["actions"][:, -1].to(self.device))
+                loss_a = torch.nn.MSELoss()(pred_action, batch["actions"].to(self.device))
                 reward_contrastive_loss  = reward_latent_consistency_loss(z_latent,pred_reward)
-                loss = 0.000025 * loss_r + loss_a 
+                loss = 0.025 * loss_r  + loss_a 
                 loss.backward()
                 self.optimizer.step()
                 total_step += 1
@@ -311,14 +313,14 @@ class LptTrainer(BaseTrainer):
                 if i%10 == 0:
                     self.logger.log_info({"step":total_step,
                                         "text":{"training_loss":loss.item()},
-                                        "scalars":{"MSE of Action":loss_a.cpu(),
-                                                   "MSE of Rewards":loss_r.cpu(),
-                                                   "MSE of Total":loss.cpu(),
+                                        "scalars":{"MSE Loss/MSE(action)":loss_a.cpu(),
+                                                   "MSE Loss/MSE(reward)":loss_r.cpu(),
+                                                   "MSE Loss/MSE(total)":loss.cpu(),
                                                    "reward contrastive loss":reward_contrastive_loss.item(),
-                                                   "predicted reward var":pred_reward.var().item(),
-                                                   "actual reward var":actual_reward_values.var().item(),
-                                                   "predicted reward mean":pred_reward.mean().item(),
-                                                   "actual reward mean":actual_reward_values.mean().item(),
+                                                   "Reward Var Stats/reward var(prediction)":pred_reward.var().item(),
+                                                   "Reward Var Stats/reward var(real)":actual_reward_values.var().item(),
+                                                   "Reward Mean Stats/reward mean(prediction)":pred_reward.mean().item(),
+                                                   "Reward Mean Stats/reward mean(real)":actual_reward_values.mean().item(),
                                                    },
                                         })
             if save_checkpoints:
@@ -326,6 +328,8 @@ class LptTrainer(BaseTrainer):
 
         if save_pt:
             self._save_model(self.args.path["weights_path"],weight_only=False)
+        
+        self.logger.close()
 
     def _save_model(self, save_dir, weight_only = True):
         os.makedirs(save_dir, exist_ok=True)

@@ -28,7 +28,7 @@ class LatentPlannerModel(nn.Module):
                  action_weight: float = 1.0,
                  z_n_iters: int = 3,
                  langevin_step_size: float = 0.3,
-                 noise_factor: float = 1.0,
+                 noise_factor: float = 0.1,
                  debug: bool = False):
         super().__init__()
 
@@ -58,7 +58,7 @@ class LatentPlannerModel(nn.Module):
 
         # Langevin sampling settings
         self.z_n_iters = z_n_iters
-        self.z_with_noise = False
+        self.z_with_noise = True
         self.noise_factor = noise_factor
         self.langevin_step_size = langevin_step_size
 
@@ -231,6 +231,3 @@ class LatentPlannerModel(nn.Module):
         pred_action, pred_state = self.trajectory_generator(timesteps, states, actions, z_latent)
         pred_reward = self.reward_forward(z_latent)
         return pred_action, pred_state, pred_reward, z_latent
-
-
-        

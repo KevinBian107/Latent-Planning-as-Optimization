@@ -67,7 +67,7 @@ class DataProcessor:
         """
 
         sequences = []
-        trajecotires = dataset.get_trajectories()
+        trajecotires = dataset[0].get_trajectories()
         
         for trajectory in tqdm(trajecotires, desc="Processing episodes"):
             # Process each trajectory into sequences

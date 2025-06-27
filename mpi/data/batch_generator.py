@@ -140,8 +140,13 @@ class SingleTaskBatchGenerator(BatchGenerator):
             # Create batch
             batch = [self.processed_data[idx % len(self.processed_data)] for idx in batch_indices]
             
-            yield {k: torch.stack([d[k] for d in batch]).to(self.device) 
-                   for k in batch[0]}
+            yield {
+                k: torch.stack([
+                    d[k].unsqueeze(-1) if d[k].ndim == 1 else d[k]
+                    for d in batch
+                ]).to(self.device)
+                for k in batch[0].keys()
+            }
 
 
     def get_random_batch(self):

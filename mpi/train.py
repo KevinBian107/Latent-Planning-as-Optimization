@@ -5,11 +5,10 @@ import argparse
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str,default="mpi/configs/halfcheetah.yaml")
-    parser.add_argument("--device", type=str, default="cpu")
-    parser.add_argument("--task", choices=["inference","training"])
+    parser.add_argument("--config", type=str,default="mpi/configs/maze2d.yaml")
+    parser.add_argument("--task", default="training")#choices=["inference","training"])
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--model_name", type = str, default="BasicDT")
+    parser.add_argument("--model_name", type = str, default="BasicLPT")
     parser.add_argument("--train_type", type = str, default="mixed")
     args = parser.parse_args()
     config = parse_args(args)

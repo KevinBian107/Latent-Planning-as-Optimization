@@ -43,14 +43,11 @@ class CrossAttnBlock(nn.Module):
     def forward(self, x_tuple):
         x, z_latent = x_tuple
         # Masked Self Attention
-        x = x + self.self_attn(x)
-        x = self.ln1(x)
+        x = x + self.self_attn(self.ln1(x))
         # Cross Attention (query: x, key/value: z_latent)
-        x = x + self.cross_attn(x, z_latent, z_latent)
-        x = self.ln2(x)
+        x = x + self.cross_attn(self.ln2(x), z_latent, z_latent)
         # MLP
-        x = x + self.mlp(x)
-        x = self.ln3(x)
+        x = x + self.mlp(self.ln3(x))
         return x
 
 
