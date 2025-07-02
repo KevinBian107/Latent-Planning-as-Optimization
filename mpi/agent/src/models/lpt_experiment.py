@@ -1,233 +1,188 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from agent.src.layers.block import Block
 from agent.src.models.conditional_decision_transformer import ConditionalDecisionTransformer
-from agent.src.models.unet1d import Unet1D,SimpleUnet1D
-from agent.src.models.vae1d import VAE1D
-from agent.src.util_function import register_model
 
-from typing import Optional, Tuple
+"""
+posterior distribution
+"""
 
-class Swish(nn.Module):
-    def forward(self, x):
-        return x * torch.sigmoid(x)
-    
-@register_model("BasicLPT")
-class LatentPlannerModel(nn.Module):
-    def __init__(self, 
-                 state_dim: int, 
-                 act_dim: int, 
-                 context_len: int, 
-                 h_dim: int = 128, 
-                 n_blocks: int = 4, 
-                 n_heads: int = 2, 
-                 drop_p: float = 0.1, 
-                 n_latent: int = 4,
-                 device: Optional[torch.device] = None,
-                 reward_weight: float = 1.0,
-                 action_weight: float = 1.0,
-                 z_n_iters: int = 3,
-                 langevin_step_size: float = 0.3,
-                 noise_factor: float = 0.1,
-                 debug: bool = False):
+class DecisionTransformerEncoder(nn.Module):
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            nn.init.xavier_uniform_(module.weight)
+            if module.bias is not None:
+                nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            nn.init.normal_(module.weight, mean=0.0, std=0.02)
+            
+    def __init__(self, state_dim, act_dim, n_blocks, h_dim, context_len,
+                 n_heads, drop_p, max_timestep=4096):
         super().__init__()
 
         self.state_dim = state_dim
         self.act_dim = act_dim
         self.h_dim = h_dim
-        self.context_len = context_len
-        self.n_latent = n_latent
-        self.z_dim = h_dim * n_latent
-        self.z_best_idx = 0
-        self.y_max = 0
-        self.debug = debug
+        self.attention_pool = TrajectoryAttentionPool
 
-        self.device = device if device is not None else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        ### transformer blocks
+        input_seq_len = 3 * context_len
+        blocks = [Block(h_dim, input_seq_len, n_heads, drop_p) for _ in range(n_blocks)]
+        self.transformer = nn.Sequential(*blocks)
 
-        self.planner = SimpleUnet1D(dim=self.z_dim, channels=1, dim_mults=(1, 2, 4)).to(self.device)
-        # self.planner = VAE1D(dim=self.z_dim).to(self.device)
-        
-        self.trajectory_generator = ConditionalDecisionTransformer(
-            state_dim, act_dim, n_blocks, h_dim, context_len, n_heads, drop_p
-        ).to(self.device)
-        self.reward_predictor = nn.Sequential(
-            nn.Linear(self.z_dim, 256),
-            Swish(),
-            nn.Linear(256, 1)
-        ).to(self.device)
+        ### projection heads (project to embedding)
+        self.embed_ln = nn.LayerNorm(h_dim)
+        self.embed_timestep = nn.Embedding(max_timestep, h_dim)
+        self.embed_rtg = torch.nn.Linear(1, h_dim)
+        self.embed_state = torch.nn.Linear(state_dim, h_dim)
 
-        # Langevin sampling settings
-        self.z_n_iters = z_n_iters
-        self.z_with_noise = True
-        self.noise_factor = noise_factor
-        self.langevin_step_size = langevin_step_size
+        # # discrete actions
+        # self.embed_action = torch.nn.Embedding(act_dim, h_dim)
+        # use_action_tanh = False # False for discrete actions
 
-        # Loss weights
-        self.reward_weight = reward_weight
-        self.action_weight = action_weight
+        # continuous actions
+        self.embed_action = torch.nn.Linear(act_dim, h_dim)
+        use_action_tanh = True # True for continuous actions
 
-        # z buffer
-        self.z_buffer = torch.randn(1000, self.n_latent, self.h_dim, device=self.device)
+        ### prediction heads
+        self.predict_rtg = torch.nn.Linear(h_dim, 1)
+        self.predict_state = torch.nn.Linear(h_dim, state_dim)
+        self.predict_action = nn.Sequential(
+            *([nn.Linear(h_dim, act_dim)] + ([nn.Tanh()] if use_action_tanh else []))
+        )
+        self.apply(self._init_weights)
 
-    def unet_forward(self, z):
-        B = z.size(0)
-        z = z.view(B, 1, -1)
-        z = self.planner(z)
-        z = z.view(B, self.n_latent, self.h_dim)
-        return z
 
-    def reward_forward(self, z):
-        z = z.view(z.size(0), -1)
-        return self.reward_predictor(z).squeeze(-1)
+    def forward(self, timesteps, states, actions, returns_to_go):
 
-    def action_forward(self, states, actions, timesteps, z_latent):
-        pred_actions, _ = self.trajectory_generator(timesteps, states, actions, z_latent)
-        return pred_actions
+        B, T, _ = states.shape
+
+        time_embeddings = self.embed_timestep(timesteps)
+
+        # time embeddings are treated similar to positional embeddings
+        state_embeddings = self.embed_state(states) + time_embeddings
+        action_embeddings = self.embed_action(actions) + time_embeddings
+        returns_embeddings = self.embed_rtg(returns_to_go) + time_embeddings
+
+        # stack rtg, states and actions and reshape sequence as
+        # (r_0, s_0, a_0, r_1, s_1, a_1, r_2, s_2, a_2 ...)
+        h = torch.stack(
+            (returns_embeddings, state_embeddings, action_embeddings), dim=1
+        ).permute(0, 2, 1, 3).reshape(B, 3 * T, self.h_dim)
+
+        h = self.embed_ln(h)
+
+        # transformer and prediction
+        h = self.transformer(h)
+
+        # get h reshaped such that its size = (B x 3 x T x h_dim) and
+        # h[:, 0, t] is conditioned on the input sequence r_0, s_0, a_0 ... r_t
+        # h[:, 1, t] is conditioned on the input sequence r_0, s_0, a_0 ... r_t, s_t
+        # h[:, 2, t] is conditioned on the input sequence r_0, s_0, a_0 ... r_t, s_t, a_t
+        # that is, for each timestep (t) we have 3 output embeddings from the transformer,
+        # each conditioned on all previous timesteps plus 
+        # the 3 input variables at that timestep (r_t, s_t, a_t) in sequence.
+        h = h.reshape(B, T, 3, self.h_dim).permute(0, 2, 1, 3)
+        h_seq = h.reshape(B, 3 * T, self.h_dim)  # [B, L, H]
+
+        return h_seq
+
+
+class TrajectoryAttentionPool(nn.Module):
+    def __init__(self, hidden_dim):
+        super().__init__()
+        self.query = nn.Parameter(torch.randn(1, 1, hidden_dim))  # [1, 1, H]
+        self.attn = nn.MultiheadAttention(hidden_dim, num_heads=4, batch_first=True)
+
+    def forward(self, h_seq):  # h_seq: [B, L, H]
+        B = h_seq.size(0)
+        q = self.query.expand(B, -1, -1)  # [B, 1, H]
+        pooled, _ = self.attn(q, h_seq, h_seq)  # [B, 1, H]
+        return pooled.squeeze(1)  # [B, H]
     
-    def infer_z_given_y(self, y, step_size=0.3, omega_cg=1.0):
-        self.eval()
-        batch_size = y.shape[0]
-        device = y.device
-        step_size = self.langevin_step_size
+class TrajectoryEncoder(nn.Module):
+    def __init__(self, h_dim, z_dim, num_latent):
+        super().__init__()
+        self.num_latent = num_latent
+        self.attn = nn.MultiheadAttention(h_dim, num_heads=1, batch_first=True)
+        self.query = nn.Parameter(torch.randn(1, num_latent, h_dim))  # learnable queries
 
-        # Use best-known z as initialization (or random)
-        z = self.z_buffer[self.z_best_idx].unsqueeze(0).expand(batch_size, -1, -1).clone().to(device)
+        self.fc_mu = nn.Linear(h_dim, z_dim)
+        self.fc_logvar = nn.Linear(h_dim, z_dim)
 
-        z_mse_grads_norm = []
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
 
-        for i in range(self.z_n_iters):
-            z = z.detach().clone()
-            z.requires_grad_(True)
+    def forward(self, h_seq):  # [B, L, H]
+        B = h_seq.size(0)
+        q = self.query.expand(B, -1, -1)   # [B, N, H]
+        attn_out, _ = self.attn(q, h_seq, h_seq)  # [B, N, H]
 
-            z_unet = self.unet_forward(z)
-            y_hat = self.reward_forward(z_unet)
+        mu = self.fc_mu(attn_out)       # [B, N, z_dim]
+        logvar = self.fc_logvar(attn_out)
+        z = self.reparameterize(mu, logvar)  # [B, N, z_dim]
 
-            mse = F.mse_loss(y_hat, y.squeeze(), reduction='sum')
-            z_grad = torch.autograd.grad(mse, z)[0].detach()
-
-            # Langevin update
-            z = z - 0.5 * step_size**2 * (z + z_grad * omega_cg)
-
-            if self.z_with_noise:
-                z += self.noise_factor * step_size * torch.randn_like(z)
-
-            z_mse_grads_norm.append(torch.norm(z_grad, dim=1).mean().item())
-
-            if self.debug:
-                print(f"[{i}] MSE: {mse.item():.4f}, GradNorm: {z_mse_grads_norm[-1]:.4f}")
-
-        z = z.detach()
-        #FIXME if it should not change back to self.train
-        #self.train()
-        return z, z_mse_grads_norm
-
-    def infer_z(self, states, actions, timesteps, rewards, batch_inds, attention_mask):
-        self.eval()
-
-        z = self.z_buffer[batch_inds]
-
-        for _ in range(self.z_n_iters):
-            # z = z.detach().clone()
-            # z.requires_grad_(True)
-
-            # z_latent = self.unet_forward(z)
-
-            # # Predict reward
-            # pred_rewards = self.reward_forward(z_latent)
-            # reward_loss = torch.nn.MSELoss()(pred_rewards, rewards.squeeze(1))
-
-            # # Predict action
-            # pred_actions, _ = self.trajectory_generator(timesteps, states, actions, z_latent)
-            # target_actions = actions[:, -1, :] 
-            # action_loss = F.mse_loss(pred_actions, target_actions, reduction='mean')
-
-            # # Combine
-            # total_loss = self.reward_weight * reward_loss + self.action_weight * action_loss
-
-            # grad = torch.autograd.grad(total_loss, z)[0]
-            # z = z - 0.5 * self.langevin_step_size**2 * grad
-
-            # if self.z_with_noise:
-            #     z += self.noise_factor * self.langevin_step_size * torch.randn_like(z)
-
-            z = z.detach().clone()
-            z.requires_grad_(True)
-
-            # 1. Predict action
-            z_latent_action = self.unet_forward(z)
-            pred_actions, _ = self.trajectory_generator(timesteps, states, actions, z_latent_action)
-            target_actions = actions
-            action_loss = F.l1_loss(pred_actions, target_actions,reduction='none') #use reduction= none to get a element-wise loss
-            masked_l1 = action_loss * attention_mask
-            action_loss = masked_l1.mean()
-            # update z
-            z_grad_nll = torch.autograd.grad(action_loss, z)[0]
-            z = z - 0.5 * (self.langevin_step_size ** 2) * (z_grad_nll + z)
-
-            # 2. Predict reward
-            z_latent_reward = self.unet_forward(z)
-            pred_rewards = self.reward_forward(z_latent_reward).unsqueeze(-1)
-            target_rewards = rewards
-            reward_loss = F.l1_loss(pred_rewards, target_rewards,reduction="mean")
-            # update z
-            z_grad_mse = torch.autograd.grad(reward_loss, z)[0]
-            z = z - 0.5 * self.langevin_step_size ** 2 * z_grad_mse
-
-            if self.z_with_noise:
-                z += self.noise_factor * self.langevin_step_size * torch.randn_like(z)
-            if self.debug:
-                print(f"z_grad_mse: {z_grad_mse.mean().item():.4f}, z_grad_nll: {z_grad_nll.mean().item():.4f}")
-
-        z = z.detach()
-        self.z_buffer[batch_inds] = z
-        self.train()
-        return z
-
-    def forward(self, 
-                states: torch.Tensor, 
-                actions: torch.Tensor, 
-                timesteps: torch.Tensor, 
-                rewards: torch.Tensor, 
-                batch_inds: torch.Tensor,
-                attention_mask: torch.Tensor,
-                debug: bool = False) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        return z, mu, logvar
+    
+class VAE(nn.Module):
+    def __init__(self,state_dim, 
+                    act_dim, 
+                    n_blocks, 
+                    h_dim, 
+                    context_len,
+                    n_heads, 
+                    drop_p,
+                    z_dim,
+                    num_latent):
         """
-        1. infer the new z first(include gamma and beta to construct action/reward trajectory loss) 
-        2. use the alpha model to generate z_latent for attention_mask
-        3. get the pred_reward and pred_actions from beta
-
+        transformer get the trajectory representation
         """
-
-        states = states.to(self.device)
-        actions = actions.to(self.device)
-        timesteps = timesteps.to(self.device)
-        rewards = rewards.to(self.device)
-        batch_inds = batch_inds.to(self.device)
-        if debug:
-            print("state: ",states.shape)
-            print("action: ",actions.shape)
-            print("timesteps: ",timesteps.shape)
-            print("rewards: ", rewards.shape)
-            print("batch_inds: ", batch_inds.shape)
-            print("attention_mask: ", attention_mask.shape)
+        """
+        encoder to get the representation z
+        """
+        super().__init__()
+        self.transformer = DecisionTransformerEncoder(state_dim, 
+                                                      act_dim, 
+                                                      n_blocks, 
+                                                      h_dim, 
+                                                      context_len,
+                                                      n_heads, 
+                                                      drop_p)
+        self.encoder = TrajectoryEncoder(h_dim, 
+                                         z_dim, 
+                                         num_latent)
+        
+        self.TrajectoryDecoder = ConditionalDecisionTransformer(state_dim, 
+                                                                 act_dim, 
+                                                                 n_blocks, 
+                                                                 h_dim, 
+                                                                 context_len,
+                                                                 n_heads, 
+                                                                 drop_p, 
+                                                                 max_timestep=4096, 
+                                                                 action_tanh=True)
+        self.RewardDecoder = nn.Sequential(nn.Linear(z_dim,1))
         
 
-        # 1. Infer z
-        if self.training:
-            z = self.infer_z(states, actions, timesteps, rewards, batch_inds, attention_mask)
-            max_y = torch.max(rewards)
-            max_idx = torch.argmax(rewards)
-            if max_y > self.y_max:
-                self.y_max = max_y
-                self.z_best_idx = max_idx 
-        else:
-            z,_ = self.infer_z_given_y(rewards, step_size = self.langevin_step_size)
+    def forward(self,states,actions,returns_to_go,timesteps,rewards,disable_test = False):
+        h_sequence = self.transformer.forward(states=states,actions=actions,returns_to_go=returns_to_go,timesteps=timesteps.squeeze(-1))
+        z, mu, logvar = self.encoder.forward(h_sequence)
+        if disable_test:
+            z = torch.randn_like(z)
+        pred_action, pred_state = self.TrajectoryDecoder.forward(timesteps = timesteps.squeeze(-1), 
+                                        states = states, 
+                                        actions = actions, 
+                                        z_latent=z)
+        pred_reward = self.RewardDecoder.forward(z)
 
-        # 2. Refine z
-        z_latent = self.unet_forward(z)
+        return (pred_action,pred_state,pred_reward),(z,mu,logvar)
+    
 
-        # 3. Predict next action and state
 
-        pred_action, pred_state = self.trajectory_generator(timesteps, states, actions, z_latent)
-        pred_reward = self.reward_forward(z_latent)
-        return pred_action, pred_state, pred_reward, z_latent
+
+
+    
+

@@ -56,10 +56,10 @@ class ConditionalDecisionTransformer(nn.Module):
         #last_state_emb = h[:, -2]  # last state token
         #last_action_emb = h[:, -1]  # last action token
 
-        last_state_emb = h[:, 0::2, :]
-        last_action_emb = h[:, 1::2, :]
+        state_emb = h[:, 0::2, :]
+        action_emb = h[:, 1::2, :]
 
-        pred_action = self.predict_action(last_state_emb)
-        pred_state = self.predict_state(last_action_emb)
+        pred_action = self.predict_action(state_emb)
+        pred_state = self.predict_state(action_emb)
 
         return pred_action, pred_state
