@@ -1,4 +1,4 @@
-# Meta Planning as Inference
+# Planning is Latent Search
 This repository is designed to tackle **continual learning** problems with **long horizon planning**. We try to leverages probabilistic inference along with meta-learning to build offline learning algorithms capable of learning multipl tasks and creating its own diverse strategies, achieving the so-called "learning to learn".
 
 - [Setup environment](docs/setup.md)
