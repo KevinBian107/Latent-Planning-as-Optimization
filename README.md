@@ -1,4 +1,4 @@
-# Planning as Latent Search
+# Latent Planning as Search & Optimization
 This repository is designed to tackle **continual learning** problems with **long horizon planning**. We try to leverages probabilistic inference and latent optimization to build offline learning algorithms capable of planning during training and learning novel tasks on teh fly through efficient inferences.
 
 - [Setup environment](docs/setup.md)
