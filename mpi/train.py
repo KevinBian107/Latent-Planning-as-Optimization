@@ -2,7 +2,9 @@ from utils.args import parse_args
 from agent.trainer import LptTrainer, DtTrainer
 from agent.inferencer import LPTInferencer, DTInferencer
 import argparse
-
+import os
+os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:7890'
+os.environ['HTTP_PROXY'] = 'http://127.0.0.1:7890'
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str,default="mpi/configs/maze2d.yaml")

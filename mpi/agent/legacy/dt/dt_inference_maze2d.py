@@ -19,7 +19,7 @@ model.to(device)
 model.device = device
 model.eval()
 
-dataset = minari.load_dataset('D4RL/pointmaze/medium-dense-v2', download=True)
+dataset = minari.load_dataset('D4RL/pointmaze/large-dense-v2', download=True)
 env = dataset.recover_environment(render_mode="human", eval_env=True)
 
 
@@ -43,7 +43,7 @@ total_reward = 0.0
 timestep     = 0
 
 # initial target return (can tune this)
-target_return = 0.0
+target_return = 80.0
 for _ in range(max_len):
     states.append(torch.tensor(full_state, dtype=torch.float32))
     actions.append(torch.zeros(action_dim))
@@ -86,6 +86,8 @@ for step in range(5000):
         action = action_preds[0, -1].cpu().numpy()
 
     # step environment
+    print(action)
+    time.sleep(1)
     obs_dict, reward, done, _, _ = env.step(action)
     obs        = obs_dict['observation']
     desired_g  = obs_dict['desired_goal']

@@ -14,7 +14,7 @@ if not torch.cuda.is_available() and torch.backends.mps.is_available():
 
 
 MAX_LEN       = 150
-HIDDEN_SIZE   = 128
+HIDDEN_SIZE   = 256
 N_LAYER       = 4
 N_HEAD        = 1
 BATCH_SIZE    = 128

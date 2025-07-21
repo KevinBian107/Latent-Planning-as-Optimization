@@ -31,7 +31,7 @@ class CrossAttnBlock(nn.Module):
     def __init__(self, h_dim, max_T, n_heads, drop_p):
         super().__init__()
         self.self_attn = MaskedCausalAttention(h_dim, max_T, n_heads, drop_p)
-        self.cross_attn = CrossAttention(h_dim, n_heads, drop_p)
+        self.cross_attn = torch.nn.MultiheadAttention(embed_dim = h_dim, num_heads = n_heads, dropout  = drop_p,batch_first = True)
         self.mlp = nn.Sequential(
                 nn.Linear(h_dim, 4*h_dim),
                 nn.GELU(),
@@ -45,9 +45,9 @@ class CrossAttnBlock(nn.Module):
     def forward(self, x_tuple):
         x, z_latent = x_tuple
         # Masked Self Attention
-        x = x + self.self_attn(self.ln1(x))
+        x = x + self.self_attn.forward(self.ln1(x))
         # Cross Attention (query: x, key/value: z_latent)
-        x = x + self.cross_attn(self.ln2(x), z_latent, z_latent)
+        x = x + self.cross_attn.forward(self.ln2(x), z_latent, z_latent)[0]
         # MLP
         x = x + self.mlp(self.ln3(x))
         return x
