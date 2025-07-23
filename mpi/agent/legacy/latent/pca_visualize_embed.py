@@ -17,7 +17,9 @@ from agent.src.models.lpt_experiment import DecisionTransformerEncoder
 import plotly.graph_objects as go
 # Load the trained encoder model
 ###
-device = torch.device("cpu")
+encoder = torch.load("results/weights/dt_mixed_maze2d.pt",map_location="mps" ,weights_only=False)
+encoder.eval()
+device = torch.device("mps")
 context_len = 150
 h_dim = 128
 state_dim = 8
@@ -128,7 +130,7 @@ class StratifiedSampler(Sampler):
 
 # Generate h_sequence for each trajectory
 dataset = MinariTrajectoryDataset(datasets, context_len=150, device=device)
-sampler = StratifiedSampler(dataset, N_per_class=5000)
+sampler = StratifiedSampler(dataset, N_per_class=1000)
 loader = torch.utils.data.DataLoader(dataset, sampler=sampler, batch_size=1)
 
 from torch.utils.data import DataLoader
@@ -139,24 +141,26 @@ dataset_names = []
 total_rewards = []
 desired_goal_sequences = [] 
 
-
 for batch in tqdm(loader, desc="Processing trajectories"):
-    rtg = batch["return_to_go"].squeeze(0)     
-    obs = batch["observations"].squeeze(0)     
-    act = batch["actions"].squeeze(0)           
+    timesteps = batch["timesteps"].squeeze(-1).to(device)
+    states = batch["observations"].to(device)
+    actions = batch["prev_actions"].to(device)
+    returns_to_go = batch["return_to_go"].to(device)
 
-    # 拼接： [context_len, d_r + d_s + d_a]
-    h_seq = torch.cat([obs, act], dim=-1)   
-    all_h_sequences.append(h_seq)
-    desired_goal = obs[:, 6 : 8]  # [T, 2]
-    desired_goal_sequences.append(desired_goal)
+    # Generate h_sequence
+    h_sequences, _ = encoder(timesteps=timesteps, states=states, actions=actions, returns_to_go = returns_to_go)  
 
-    dataset_names.append(batch["dataset_name"][0])
-    total_rewards.append(batch["total_rewards"][0].item())
+    for i,h_sequence in enumerate(h_sequences):
+        all_h_sequences.append(h_sequence.detach().cpu().numpy().flatten())  # Flatten to 1D
+        dataset_names.append(batch["dataset_name"][i])
+        desired_goal = batch["observations"][i][:, 6 : 8].cpu()
+        desired_goal_sequences.append(desired_goal)
+        total_rewards.append(batch["total_rewards"][i].item())     
+
 
 
 # Apply PCA
-all_h_sequences = np.array([i.numpy() for i in all_h_sequences]).reshape(len(all_h_sequences), -1)
+all_h_sequences = np.array([i for i in all_h_sequences]).reshape(len(all_h_sequences), -1)
 
 pca = PCA(n_components=3)
 reduced = pca.fit_transform(np.array(all_h_sequences))  # shape [N, 3]
@@ -171,35 +175,71 @@ df = pd.DataFrame({
     "dataset": simplified_names,
     "index":index
 })
+df["reward_squared"] = df["reward"] ** 2
 
 import dash
 from dash import dcc, html, Input, Output
-# ==== Dash 页面 ====
+import plotly.express as px
+import plotly.graph_objects as go
+import numpy as np
+import pandas as pd
+
+# ====== 示例数据（请替换为你自己的）======
+reward_min = df["reward"].min()
+reward_max = df["reward"].max()
+
+# ====== Dash 页面 ======
 app = dash.Dash(__name__)
 
 app.layout = html.Div([
     html.Div([
-        dcc.Graph(
-            id="pca-3d",
-            figure=px.scatter_3d(
-                df,
-                x="PCA1", y="PCA2", z="PCA3",
-                opacity=0.7,
-                color="dataset",
-                size="reward",
-                hover_data=["dataset", "reward", "index"],
-                custom_data=["index"],  # 👈 非常关键：hover/click 可读取 index
-                title="3D PCA of h_sequence (Interactive)"
-            ).update_traces(marker=dict(size=5))
+        html.Label("🎚 Filter by reward:"),
+        dcc.RangeSlider(
+            id="reward-range",
+            min=reward_min,
+            max=reward_max,
+            step=0.01,
+            value=[reward_min, reward_max],
+            marks={
+                round(reward_min, 2): str(round(reward_min, 2)),
+                round(reward_max, 2): str(round(reward_max, 2))
+            },
+            tooltip={"always_visible": False}
         )
-    ], style={"height": "800px","width": "65%", "display": "inline-block", "verticalAlign": "top"}), 
+    ], style={"padding": "20px", "width": "90%"}),
+
+    html.Div([
+        dcc.Graph(id="pca-3d")
+    ], style={"height": "800px", "width": "65%", "display": "inline-block", "verticalAlign": "top"}),
 
     html.Div([
         dcc.Graph(id="goal-trajectory")
-    ], style={"width": "34%", "display": "inline-block", "verticalAlign": "top", "paddingLeft": "1%"})  # 👈 控制间距
+    ], style={"width": "34%", "display": "inline-block", "verticalAlign": "top", "paddingLeft": "1%"})
 ])
 
-# ==== 回调函数：hover 时绘图 ====
+# ====== 回调：根据 reward 范围更新主图 ======
+@app.callback(
+    Output("pca-3d", "figure"),
+    Input("reward-range", "value")
+)
+def update_pca_by_reward(reward_range):
+    min_r, max_r = reward_range
+    filtered_df = df[(df["reward"] >= min_r) & (df["reward"] <= max_r)]
+
+    fig = px.scatter_3d(
+        filtered_df,
+        x="PCA1", y="PCA2", z="PCA3",
+        opacity=0.7,
+        color="dataset",
+        size="reward_squared",
+        hover_data=["dataset", "reward", "index"],
+        custom_data=["index"],
+        title=f"3D PCA of h_sequence (Filtered: reward ∈ [{min_r:.2f}, {max_r:.2f}])"
+    ).update_traces(marker=dict(size=5))
+
+    return fig
+
+# ====== 回调：hover 时绘图 ======
 @app.callback(
     Output("goal-trajectory", "figure"),
     Input("pca-3d", "hoverData")
@@ -211,8 +251,6 @@ def show_trajectory_on_hover(hoverData):
     traj_index = hoverData["points"][0]["customdata"][0]
     traj = desired_goal_sequences[traj_index].numpy()
     num_steps = traj.shape[0]
-
-    # 步长归一化，用于颜色渐变（0.0 - 1.0）
     color_steps = np.linspace(0, 1, num_steps)
 
     fig = go.Figure()
@@ -222,15 +260,12 @@ def show_trajectory_on_hover(hoverData):
         mode="lines+markers",
         marker=dict(
             size=6,
-            color=color_steps,              # 每个点颜色表示时间
-            colorscale="Bluered",           # 从蓝到红
-            colorbar=dict(title="Step"),    # 显示颜色条
+            color=color_steps,
+            colorscale="Bluered",
+            colorbar=dict(title="Step"),
             showscale=True
         ),
-        line=dict(
-            color='rgba(0,0,0,0)',          # 让线不覆盖点颜色（可选）
-            width=1
-        ),
+        line=dict(color='rgba(0,0,0,0)', width=1),
         name=f"Trajectory {traj_index}"
     ))
 
@@ -242,5 +277,6 @@ def show_trajectory_on_hover(hoverData):
     )
     return fig
 
-
-app.run(debug=True)
+# ====== 启动 ======
+if __name__ == "__main__":
+    app.run(debug=True)

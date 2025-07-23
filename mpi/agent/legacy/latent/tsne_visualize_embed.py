@@ -1,6 +1,6 @@
 import torch
 import matplotlib.pyplot as plt
-from sklearn.decomposition import PCA,IncrementalPCA
+from sklearn.manifold import TSNE
 from torch.utils.data import Dataset, DataLoader
 import numpy as np
 import wandb
@@ -162,15 +162,15 @@ for batch in tqdm(loader, desc="Processing trajectories"):
 # Apply PCA
 all_h_sequences = np.array([i for i in all_h_sequences]).reshape(len(all_h_sequences), -1)
 
-pca = PCA(n_components=3)
-reduced = pca.fit_transform(np.array(all_h_sequences))  # shape [N, 3]
+tsne = TSNE(n_components=3, perplexity=30, random_state=0)
+reduced = tsne.fit_transform(np.array(all_h_sequences))  # shape [N, 3]
 total_rewards = [r.item() if hasattr(r, "item") else r for r in total_rewards]
 simplified_names = [name.split("/")[-1].replace("-dense-v2", "") for name in dataset_names]
 index = np.arange(len(simplified_names))
 df = pd.DataFrame({
-    "PCA1": reduced[:, 0],
-    "PCA2": reduced[:, 1],
-    "PCA3": reduced[:, 2],
+    "tsne1": reduced[:, 0],
+    "tsne2": reduced[:, 1],
+    "tsne3": reduced[:, 2],
     "reward": total_rewards,
     "dataset": simplified_names,
     "index":index
@@ -228,13 +228,13 @@ def update_pca_by_reward(reward_range):
 
     fig = px.scatter_3d(
         filtered_df,
-        x="PCA1", y="PCA2", z="PCA3",
+        x="tsne1", y="tsne2", z="tsne3",
         opacity=0.7,
         color="dataset",
         size="reward_squared",
         hover_data=["dataset", "reward", "index"],
         custom_data=["index"],
-        title=f"3D PCA of h_sequence (Filtered: reward ∈ [{min_r:.2f}, {max_r:.2f}])"
+        title=f"3D tsne of h_sequence (Filtered: reward ∈ [{min_r:.2f}, {max_r:.2f}])"
     ).update_traces(marker=dict(size=5))
 
     return fig
@@ -270,7 +270,7 @@ def show_trajectory_on_hover(hoverData):
     ))
 
     fig.update_layout(
-        title=f"Desired Goal Trajectory #{traj_index}",
+        title=f"Achieved Goal Trajectory #{traj_index}",
         xaxis_title="goal_x",
         yaxis_title="goal_y",
         height=500

@@ -144,9 +144,12 @@ for batch in tqdm(loader, desc="Processing trajectories"):
     rtg = batch["return_to_go"].squeeze(0)     
     obs = batch["observations"].squeeze(0)     
     act = batch["actions"].squeeze(0)           
+    s = obs[:-1]              
+    a = act[:-1]               
+    s_next = obs[1:]           
+    r = batch["reward"].squeeze(0)[:-1]  
 
-    # 拼接： [context_len, d_r + d_s + d_a]
-    h_seq = torch.cat([obs, act], dim=-1)   
+    h_seq = torch.cat([s, a, s_next, r], dim=-1)
     all_h_sequences.append(h_seq)
     desired_goal = obs[:, 6 : 8]  # [T, 2]
     desired_goal_sequences.append(desired_goal)
@@ -235,7 +238,7 @@ def show_trajectory_on_hover(hoverData):
     ))
 
     fig.update_layout(
-        title=f"Desired Goal Trajectory #{traj_index}",
+        title=f"Achieved Goal Trajectory #{traj_index}",
         xaxis_title="goal_x",
         yaxis_title="goal_y",
         height=500
